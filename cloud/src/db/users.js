@@ -1,8 +1,9 @@
 import { getDb } from './index.js';
 import { randomUUID } from 'crypto';
-import { notifyNewUser } from '../notifications/discord.js';
+import { notifyNewUser, notifyGuestUser } from '../notifications/discord.js';
 import { DEFAULT_TIER } from '../billing/tiers.js';
 import { recordEvent } from './events.js';
+import { GUEST_NAMES } from '../data/guest-names.js';
 
 /**
  * Generate a user ID with format: user_ + first 12 chars of a UUID
@@ -114,15 +115,16 @@ export function updateUserTier(userId, tier) {
 export function createGuestUser() {
   const db = getDb();
   const id = generateUserId();
+  const guestName = GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)];
   db.prepare(`
     INSERT INTO users (id, is_guest, guest_started_at, display_name, tier)
-    VALUES (?, 1, datetime('now'), 'Guest', ?)
-  `).run(id, DEFAULT_TIER);
+    VALUES (?, 1, datetime('now'), ?, ?)
+  `).run(id, guestName, DEFAULT_TIER);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 
-  recordEvent('user.guest_start', id, {});
-  notifyNewUser(user).catch(err => console.warn('[discord] Unhandled:', err.message));
+  recordEvent('user.guest_start', id, { name: guestName });
+  notifyGuestUser(user).catch(err => console.warn('[discord] Unhandled:', err.message));
 
   return user;
 }
