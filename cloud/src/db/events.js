@@ -119,6 +119,37 @@ export function getEventStats(days = 30) {
     WHERE event_type = 'ws.relay' AND created_at >= datetime('now', '-' || ? || ' days')
   `).get(safeDays).count;
 
+  // Guest mode stats
+  const totalGuestStarts = db.prepare(`
+    SELECT COUNT(*) as count FROM events
+    WHERE event_type = 'user.guest_start' AND created_at >= datetime('now', '-' || ? || ' days')
+  `).get(safeDays).count;
+
+  const totalGuestConverted = db.prepare(`
+    SELECT COUNT(*) as count FROM events
+    WHERE event_type = 'user.guest_converted' AND created_at >= datetime('now', '-' || ? || ' days')
+  `).get(safeDays).count;
+
+  const guestConversionRate = totalGuestStarts > 0
+    ? Math.round((totalGuestConverted / totalGuestStarts) * 1000) / 10
+    : 0;
+
+  // Guest starts per day
+  const guestStartsPerDay = db.prepare(`
+    SELECT date(created_at) as date, COUNT(*) as count
+    FROM events
+    WHERE event_type = 'user.guest_start' AND created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY date(created_at) ORDER BY date ASC
+  `).all(safeDays);
+
+  // Guest conversions per day
+  const guestConversionsPerDay = db.prepare(`
+    SELECT date(created_at) as date, COUNT(*) as count
+    FROM events
+    WHERE event_type = 'user.guest_converted' AND created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY date(created_at) ORDER BY date ASC
+  `).all(safeDays);
+
   return {
     signupsPerDay,
     totalSignups,
@@ -133,6 +164,11 @@ export function getEventStats(days = 30) {
     agentOsDistribution,
     agentVersionDistribution,
     totalRelayMessages,
+    totalGuestStarts,
+    totalGuestConverted,
+    guestConversionRate,
+    guestStartsPerDay,
+    guestConversionsPerDay,
   };
 }
 
