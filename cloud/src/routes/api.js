@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { requireAuth } from '../auth/middleware.js';
 import { getAgentsByUser, getAgentById, registerAgent, deleteAgent } from '../db/agents.js';
+import { deleteLayoutsByAgent } from '../db/layouts.js';
 import { generateAgentToken } from '../auth/agentAuth.js';
 import { getTierLimits } from '../billing/tiers.js';
 
@@ -159,6 +160,7 @@ export function setupApiRoutes(app) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    deleteLayoutsByAgent(req.user.id, req.params.id);
     deleteAgent(req.params.id);
     res.json({ ok: true });
   });

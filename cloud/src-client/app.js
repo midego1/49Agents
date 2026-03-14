@@ -789,6 +789,9 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             <span class="hud-device-name">${escapeHtml(device.name)}</span>
             ${versionDotHtml}
             ${countsHtml}
+            <button class="hud-device-delete" data-device="${escapeHtml(device.name)}" data-tooltip="Remove machine">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12"/><path d="M5.5 4V2.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V4"/><path d="M12.5 4v9a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 13V4"/></svg>
+            </button>
           </div>
           ${metricsHtml}
         </div>
@@ -881,6 +884,69 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
       });
       card.appendChild(row);
     }
+
+    // Delete machine buttons
+    content.querySelectorAll('.hud-device-delete').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const deviceName = btn.dataset.device;
+        const agentEntry = agents.find(a => a.hostname === deviceName);
+        if (!agentEntry) return;
+
+        if (!confirm(`Remove "${deviceName}" and all its panes? This cannot be undone.`)) return;
+
+        try {
+          await cloudFetch('DELETE', `/api/agents/${agentEntry.agentId}`);
+
+          // Remove all panes belonging to this agent
+          const agentPanes = state.panes.filter(p => p.agentId === agentEntry.agentId || p.device === deviceName);
+          for (const pane of agentPanes) {
+            const paneEl = document.getElementById(`pane-${pane.id}`);
+            if (paneEl) paneEl.remove();
+            // Clean up terminal instances
+            const termInfo = terminals.get(pane.id);
+            if (termInfo) {
+              termInfo.xterm.dispose();
+              terminals.delete(pane.id);
+              termDeferredBuffers.delete(pane.id);
+            }
+            // Clean up editor instances
+            const editorInfo = fileEditors.get(pane.id);
+            if (editorInfo) {
+              if (editorInfo.monacoEditor) editorInfo.monacoEditor.dispose();
+              if (editorInfo.resizeObserver) editorInfo.resizeObserver.disconnect();
+              if (editorInfo.refreshInterval) clearInterval(editorInfo.refreshInterval);
+              if (editorInfo.labelInterval) clearInterval(editorInfo.labelInterval);
+              fileEditors.delete(pane.id);
+            }
+            const noteInfo = noteEditors.get(pane.id);
+            if (noteInfo) {
+              if (noteInfo.monacoEditor) noteInfo.monacoEditor.dispose();
+              if (noteInfo.resizeObserver) noteInfo.resizeObserver.disconnect();
+              noteEditors.delete(pane.id);
+            }
+            const ggInfo = gitGraphPanes.get(pane.id);
+            if (ggInfo?.refreshInterval) clearInterval(ggInfo.refreshInterval);
+            gitGraphPanes.delete(pane.id);
+            const bInfo = beadsPanes.get(pane.id);
+            if (bInfo?.refreshInterval) clearInterval(bInfo.refreshInterval);
+            beadsPanes.delete(pane.id);
+            const fpInfo = folderPanes.get(pane.id);
+            if (fpInfo?.refreshInterval) clearInterval(fpInfo.refreshInterval);
+            folderPanes.delete(pane.id);
+          }
+          state.panes = state.panes.filter(p => p.agentId !== agentEntry.agentId && p.device !== deviceName);
+
+          // Remove agent from local state
+          agents = agents.filter(a => a.agentId !== agentEntry.agentId);
+          hudData.devices = hudData.devices.filter(d => d.name !== deviceName);
+          renderHud();
+        } catch (err) {
+          console.error('[App] Failed to delete machine:', err);
+          alert('Failed to remove machine. Please try again.');
+        }
+      });
+    });
 
     content.querySelectorAll('.hud-device').forEach(card => {
       card.addEventListener('click', (e) => {

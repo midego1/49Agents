@@ -81,6 +81,14 @@ export function deletePaneLayout(userId, paneId) {
 }
 
 /**
+ * Delete all pane layouts for a given agent.
+ */
+export function deleteLayoutsByAgent(userId, agentId) {
+  const db = getDb();
+  db.prepare('DELETE FROM pane_layouts WHERE user_id = ? AND agent_id = ?').run(userId, agentId);
+}
+
+/**
  * Upsert a single pane layout (create or update).
  */
 export function upsertPaneLayout(userId, pane) {

@@ -2481,6 +2481,32 @@ html, body {
   min-width: 0;
 }
 
+.hud-device-delete {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  flex-shrink: 0;
+  margin-left: 2px;
+  transition: all 0.15s ease;
+}
+
+.hud-device:hover .hud-device-delete {
+  display: flex;
+}
+
+.hud-device-delete:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: rgba(239, 68, 68, 0.9);
+}
+
 .hud-counts {
   display: flex;
   align-items: center;
