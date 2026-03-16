@@ -101,6 +101,13 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     return `<span class="pane-shortcut-badge" data-tooltip="Tab+${num} to jump here (click to reassign)">${num}</span>`;
   }
 
+  function paneNameHtml(paneData) {
+    const name = paneData.paneName || '';
+    const display = name ? escapeHtml(name) : 'Name';
+    const cls = name ? 'pane-name' : 'pane-name empty';
+    return `<span class="${cls}">${display}</span>`;
+  }
+
   function jumpToPane(paneData) {
     // Same zoom/center behavior as move mode confirm
     const targetZoom = calcMoveModeZoom(paneData);
@@ -640,6 +647,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
       if (pane.claudeSessionName) metadata.claudeSessionName = pane.claudeSessionName;
       if (pane.workingDir) metadata.workingDir = pane.workingDir;
       if (pane.shortcutNumber) metadata.shortcutNumber = pane.shortcutNumber;
+      if (pane.paneName) metadata.paneName = pane.paneName;
       cloudFetch('PUT', `/api/layouts/${pane.id}`, {
         paneType: pane.type,
         positionX: pane.x,
@@ -4035,6 +4043,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     pane.innerHTML = `
       <div class="pane-header">
         <span class="pane-title">${titleHtml}</span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <span class="connection-status disconnected" data-tooltip="Disconnected"></span>
@@ -4126,6 +4135,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
           if (cl.metadata.claudeSessionName) pane.claudeSessionName = cl.metadata.claudeSessionName;
           if (cl.metadata.workingDir) pane.workingDir = cl.metadata.workingDir;
           if (cl.metadata.shortcutNumber) pane.shortcutNumber = cl.metadata.shortcutNumber;
+          if (cl.metadata.paneName) pane.paneName = cl.metadata.paneName;
         }
         // Fill in device from agent hostname if the agent didn't return one
         if (!pane.device && agentHostname) pane.device = agentHostname;
@@ -4201,6 +4211,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             if (meta.claudeSessionId) pane.claudeSessionId = meta.claudeSessionId;
             if (meta.claudeSessionName) pane.claudeSessionName = meta.claudeSessionName;
             if (meta.shortcutNumber) pane.shortcutNumber = meta.shortcutNumber;
+            if (meta.paneName) pane.paneName = meta.paneName;
             state.panes.push(pane);
             renderOfflinePlaceholder(pane);
           }
@@ -5269,6 +5280,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
           ${deviceTag}<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align: middle; margin-right: 4px;">${ICON_GIT_GRAPH}</svg>
           ${paneData.repoName || 'Git Graph'}
         </span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <div class="pane-zoom-controls">
@@ -5555,6 +5567,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     pane.innerHTML = `
       <div class="pane-header">
         <span class="pane-title">${deviceTag}${beadsTag}<span style="opacity:0.7;">Terminal</span></span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="beads-tag-btn" aria-label="Set beads issue" data-tooltip="Set beads issue"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="0">${ICON_BEADS}</svg></button>
@@ -5614,6 +5627,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     pane.innerHTML = `
       <div class="pane-header">
         <span class="pane-title">${deviceTag}📄 ${escapeHtml(paneData.fileName || 'Untitled')}</span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="pane-mention-btn" data-tooltip="Mention in Claude Code">@</button>
@@ -6073,6 +6087,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     pane.innerHTML = `
       <div class="pane-header">
         <span class="pane-title">\u{1F4DD} Note</span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="note-text-only-btn" aria-label="Preview markdown" data-tooltip="Preview markdown">\u{1F441}</button>
@@ -6267,6 +6282,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     pane.innerHTML = `
       <div class="pane-header">
         <span class="pane-title">🌐 ${escapeHtml(truncateUrl(paneData.url))}</span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="pane-mention-btn" data-tooltip="Mention in Claude Code">@</button>
@@ -6450,6 +6466,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
           ${deviceTag}<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align: middle; margin-right: 4px;">${ICON_BEADS}</svg>
           Beads Issues
         </span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <div class="pane-zoom-controls">
@@ -6539,6 +6556,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
           ${deviceTag}<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align: middle; margin-right: 4px;">${ICON_FOLDER}</svg>
           <span class="folder-path-label">${escapeHtml(shortPath)}</span>
         </span>
+        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="folder-toolbar-btn folder-new-file-btn" data-tooltip="New File">
@@ -8003,6 +8021,58 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     }
 
     const applyZoom = () => applyPaneZoom(paneData, paneEl);
+
+    // Pane name: double-click to edit
+    const paneNameEl = paneEl.querySelector('.pane-name');
+    if (paneNameEl) {
+      paneNameEl.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (paneEl.querySelector('.pane-name-input')) return;
+
+        const input = document.createElement('input');
+        input.className = 'pane-name-input';
+        input.type = 'text';
+        input.value = paneData.paneName || '';
+        input.placeholder = 'Name';
+        input.maxLength = 50;
+
+        paneNameEl.style.display = 'none';
+        header.appendChild(input);
+        input.focus();
+        input.select();
+
+        const commit = () => {
+          const val = input.value.trim();
+          paneData.paneName = val || '';
+          input.remove();
+          paneNameEl.style.display = '';
+          if (val) {
+            paneNameEl.textContent = val;
+            paneNameEl.classList.remove('empty');
+          } else {
+            paneNameEl.textContent = 'Name';
+            paneNameEl.classList.add('empty');
+          }
+          cloudSaveLayout(paneData);
+        };
+
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (ke) => {
+          if (ke.key === 'Enter') { ke.preventDefault(); input.blur(); }
+          if (ke.key === 'Escape') {
+            input.removeEventListener('blur', commit);
+            input.remove();
+            paneNameEl.style.display = '';
+          }
+          ke.stopPropagation();
+        });
+        // Prevent header drag while typing
+        input.addEventListener('mousedown', (me) => me.stopPropagation());
+      });
+      // Single click should not start drag
+      paneNameEl.addEventListener('mousedown', (e) => e.stopPropagation());
+    }
 
     // Shortcut badge click: open assign popup (delegated so it works after badge replacement)
     paneEl.addEventListener('click', (e) => {
