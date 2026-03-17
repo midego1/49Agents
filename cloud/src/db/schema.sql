@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url    TEXT,
   tier          TEXT NOT NULL DEFAULT 'pro',
   utm_source    TEXT,
-  stripe_customer_id TEXT,
-  stripe_subscription_id TEXT,
+  lemon_subscription_id TEXT,
+  lemon_portal_url TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );

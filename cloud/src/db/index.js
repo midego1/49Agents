@@ -62,13 +62,13 @@ export function initDatabase() {
         display_name  TEXT,
         avatar_url    TEXT,
         tier          TEXT NOT NULL DEFAULT 'pro',
-        stripe_customer_id TEXT,
-        stripe_subscription_id TEXT,
+        lemon_subscription_id TEXT,
+        lemon_portal_url TEXT,
         created_at    TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
       );
-      INSERT INTO users_new (id, github_id, github_login, email, display_name, avatar_url, tier, stripe_customer_id, stripe_subscription_id, created_at, updated_at)
-        SELECT id, github_id, github_login, email, display_name, avatar_url, tier, stripe_customer_id, stripe_subscription_id, created_at, updated_at FROM users;
+      INSERT INTO users_new (id, github_id, github_login, email, display_name, avatar_url, tier, created_at, updated_at)
+        SELECT id, github_id, github_login, email, display_name, avatar_url, tier, created_at, updated_at FROM users;
       DROP TABLE users;
       ALTER TABLE users_new RENAME TO users;
     `);
@@ -113,6 +113,39 @@ export function initDatabase() {
   try {
     db.prepare("ALTER TABLE users ADD COLUMN utm_source TEXT").run();
   } catch (e) { /* already exists */ }
+
+  // Migration: Rename stripe columns to lemon columns
+  try {
+    db.prepare('SELECT lemon_subscription_id FROM users LIMIT 1').get();
+  } catch (e) {
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE users_new (
+        id            TEXT PRIMARY KEY,
+        github_id     INTEGER UNIQUE,
+        github_login  TEXT,
+        google_id     TEXT UNIQUE,
+        email         TEXT,
+        display_name  TEXT,
+        avatar_url    TEXT,
+        tier          TEXT NOT NULL DEFAULT 'pro',
+        utm_source    TEXT,
+        lemon_subscription_id TEXT,
+        lemon_portal_url TEXT,
+        is_guest      INTEGER NOT NULL DEFAULT 0,
+        guest_started_at TEXT,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO users_new (id, github_id, github_login, google_id, email, display_name, avatar_url, tier, utm_source, is_guest, guest_started_at, created_at, updated_at)
+        SELECT id, github_id, github_login, google_id, email, display_name, avatar_url, tier, utm_source,
+          COALESCE(is_guest, 0), guest_started_at, created_at, updated_at FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+    db.pragma('foreign_keys = ON');
+    console.log('[db] Migration: Renamed stripe columns to lemon columns');
+  }
 
   // Migration: guest mode columns on users
   try {

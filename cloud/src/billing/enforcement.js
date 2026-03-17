@@ -95,7 +95,7 @@ export function check(userId, message, userAgents) {
     return {
       feature: limitKey,
       message: `Your plan allows ${limit} ${featureNames[limitKey] || limitKey}. Upgrade to Pro for more.`,
-      upgradeUrl: '/api/billing/checkout',
+      upgradeUrl: '/upgrade',
     };
   }
 
@@ -123,7 +123,7 @@ export function checkAgentLimit(userId, userAgents) {
     return {
       feature: 'agents',
       message: `Your plan allows ${limits.agents} device${limits.agents > 1 ? 's' : ''}. Upgrade to Pro for more.`,
-      upgradeUrl: '/api/billing/checkout',
+      upgradeUrl: '/upgrade',
     };
   }
 
@@ -165,7 +165,7 @@ export function checkImageLimit(userId, newImageCount) {
     return {
       feature: 'noteImages',
       message: `Your plan allows ${limits.noteImages} images across all notes. You have ${current}. Upgrade for more.`,
-      upgradeUrl: '/api/billing/checkout',
+      upgradeUrl: '/upgrade',
     };
   }
   return null;

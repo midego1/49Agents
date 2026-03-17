@@ -12,7 +12,7 @@ import { setupGoogleAuth } from './auth/google.js';
 import { requireAuth } from './auth/middleware.js';
 import { setupApiRoutes } from './routes/api.js';
 import { setupLayoutRoutes } from './routes/layouts.js';
-import { setupBillingRoutes, handleStripeWebhook } from './billing/stripe.js';
+import { setupBillingRoutes, handleLemonWebhook } from './billing/lemonsqueezy.js';
 import { setupDownloadRoutes } from './routes/download.js';
 import { setupPreferencesRoutes } from './routes/preferences.js';
 import { setupAnalyticsRoutes } from './routes/analytics.js';
@@ -83,8 +83,8 @@ app.use(
 
 app.use(cookieParser());
 
-// Stripe webhook needs raw body for signature verification — must come BEFORE express.json()
-app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+// LemonSqueezy webhook needs raw body for signature verification — must come BEFORE express.json()
+app.post('/billing/webhook', express.raw({ type: 'application/json' }), handleLemonWebhook);
 
 app.use(express.json({ limit: '16kb' }));
 
