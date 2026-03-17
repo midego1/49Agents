@@ -3579,100 +3579,160 @@ body.minimap-hidden #controls {
 
 .git-graph-output {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(180, 130, 255, 0.45) transparent;
-  padding: 8px 10px;
-  margin: 0;
+  overflow: hidden;
+  position: relative;
   font-family: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
   font-size: 12px;
-  line-height: 1.5;
   color: #d4d4d4;
-  white-space: pre;
-  tab-size: 4;
-}
-
-.git-graph-output::-webkit-scrollbar {
-  width: 2px;
-  height: 2px;
-}
-
-.git-graph-output::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.git-graph-output::-webkit-scrollbar-thumb {
-  background: rgba(180, 130, 255, 0.45);
-  border-radius: 2px;
-}
-
-.git-graph-output::-webkit-scrollbar-thumb:hover {
-  background: rgba(180, 130, 255, 0.65);
 }
 
 .git-graph-loading {
   color: rgba(255,255,255,0.3);
   font-style: italic;
+  padding: 8px 10px;
+  display: block;
 }
 
 .git-graph-error {
   color: #f97583;
-}
-
-/* Git graph indicators (master/remote markers on the left) */
-.git-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  font-size: 15px;
-  flex-shrink: 0;
-  vertical-align: middle;
-}
-
-.git-indicator svg {
+  padding: 8px 10px;
   display: block;
 }
 
-.git-master {
-  color: #ffea7f;
+/* SVG graph scroll container */
+.gg-scroll-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(180, 130, 255, 0.45) transparent;
 }
 
-.git-remote {
-  color: #79b8ff;
+.gg-scroll-container::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+.gg-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gg-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(180, 130, 255, 0.45);
+  border-radius: 2px;
 }
 
-.git-synced {
-  color: #85e89d;
+/* SVG sits absolutely positioned, rows scroll alongside */
+.gg-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
 }
 
-/* Relative timestamps next to commit hashes */
-.git-time {
+.gg-rows {
+  position: relative;
+  z-index: 2;
+}
+
+/* Each commit row */
+.gg-row {
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+  cursor: default;
+  transition: background 0.1s;
+}
+.gg-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Spacer matches SVG width so text starts after the graph lines */
+.gg-graph-spacer {
+  flex-shrink: 0;
+}
+
+/* Commit info area */
+.gg-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.gg-hash {
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.gg-hash:hover {
+  text-decoration: underline;
+}
+
+.gg-time {
   color: rgba(255,255,255,0.25);
-  font-size: 0.9em;
-  margin-right: 2px;
+  font-size: 10px;
+  flex-shrink: 0;
+  min-width: 24px;
 }
 
-/* ANSI color classes for git graph output */
-.ansi-bold { font-weight: bold; }
-.ansi-dim { opacity: 0.6; }
-.ansi-black { color: #1e1e1e; }
-.ansi-red { color: #f97583; }
-.ansi-green { color: #85e89d; }
-.ansi-yellow { color: #ffea7f; }
-.ansi-blue { color: #79b8ff; }
-.ansi-magenta { color: #b392f0; }
-.ansi-cyan { color: #4ec9b0; }
-.ansi-white { color: #d4d4d4; }
-.ansi-bright-black { color: #6a737d; }
-.ansi-bright-red { color: #fdaeb7; }
-.ansi-bright-green { color: #bef5cb; }
-.ansi-bright-yellow { color: #fff5b1; }
-.ansi-bright-blue { color: #c8e1ff; }
-.ansi-bright-magenta { color: #d1bcf9; }
-.ansi-bright-cyan { color: #76e4cc; }
-.ansi-bright-white { color: #fafbfc; }
+/* Ref badges (branch, tag, remote) */
+.gg-ref {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
+  line-height: 18px;
+}
+
+.gg-ref-head {
+  background: rgba(78, 201, 176, 0.2);
+  color: #4ec9b0;
+  border: 1px solid rgba(78, 201, 176, 0.3);
+}
+
+.gg-ref-branch {
+  background: rgba(121, 184, 255, 0.15);
+  color: #79b8ff;
+  border: 1px solid rgba(121, 184, 255, 0.25);
+}
+
+.gg-ref-remote {
+  background: rgba(179, 146, 240, 0.15);
+  color: #b392f0;
+  border: 1px solid rgba(179, 146, 240, 0.25);
+}
+
+.gg-ref-tag {
+  background: rgba(255, 211, 61, 0.15);
+  color: #ffd33d;
+  border: 1px solid rgba(255, 211, 61, 0.25);
+}
+
+.gg-subject {
+  color: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.gg-author {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: auto;
+  padding-left: 8px;
+}
 
 /* ==================== iframe pane ==================== */
 
@@ -3736,41 +3796,6 @@ body.minimap-hidden #controls {
 .iframe-open-external:hover {
   color: rgba(255, 255, 255, 0.9);
 }
-
-/* Git branch colors: master = green, others = blue */
-.git-branch-master { color: #85e89d; }
-.git-branch-other  { color: #79b8ff; }
-
-/* 256-color palette - fallback ANSI colors */
-.ansi-256-1 { color: #f97583; }
-.ansi-256-2 { color: #85e89d; }
-.ansi-256-3 { color: #ffea7f; }
-.ansi-256-4 { color: #79b8ff; }
-.ansi-256-5 { color: #b392f0; }
-.ansi-256-6 { color: #4ec9b0; }
-.ansi-256-7 { color: #d4d4d4; }
-.ansi-256-9 { color: #fdaeb7; }
-.ansi-256-10 { color: #bef5cb; }
-.ansi-256-11 { color: #ffea7f; }
-.ansi-256-12 { color: #c8e1ff; }
-.ansi-256-13 { color: #d1bcf9; }
-.ansi-256-14 { color: #76e4cc; }
-.ansi-256-208 { color: #f0883e; }
-.ansi-256-166 { color: #d15704; }
-.ansi-256-196 { color: #ff0000; }
-.ansi-256-202 { color: #ff5f00; }
-.ansi-256-226 { color: #ffff00; }
-.ansi-256-46 { color: #00ff00; }
-.ansi-256-51 { color: #00ffff; }
-.ansi-256-201 { color: #ff00ff; }
-.ansi-256-33 { color: #0087ff; }
-.ansi-256-69 { color: #5f87ff; }
-.ansi-256-75 { color: #5fafff; }
-.ansi-256-81 { color: #5fd7ff; }
-.ansi-256-117 { color: #87d7ff; }
-.ansi-256-153 { color: #afd7ff; }
-.ansi-256-214 { color: #ffaf00; }
-.ansi-256-220 { color: #ffd700; }
 
 /* Placement mode */
 .placement-active {
