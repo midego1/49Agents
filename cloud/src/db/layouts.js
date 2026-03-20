@@ -104,6 +104,7 @@ export function upsertPaneLayout(userId, pane) {
       z_index = excluded.z_index,
       metadata = excluded.metadata,
       updated_at = datetime('now')
+    WHERE user_id = excluded.user_id
   `).run(
     pane.id,
     userId,

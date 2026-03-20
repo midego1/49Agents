@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, resolve } from 'path';
 import { homedir } from 'os';
 import { config } from '../src/config.js';
+import { validateWorkingDirectory } from './sanitize.js';
 
 const DATA_DIR = config.dataDir;
 const FILE_PANES_FILE = join(DATA_DIR, 'file-panes.json');
@@ -34,10 +35,21 @@ function expandPath(filePath) {
 }
 
 /**
+ * Expand path and validate it is within allowed directories ($HOME, /tmp).
+ * Prevents path traversal attacks via file pane operations.
+ */
+function expandAndValidatePath(filePath) {
+  const expandedPath = expandPath(filePath);
+  const resolved = resolve(expandedPath);
+  validateWorkingDirectory(resolved);
+  return resolved;
+}
+
+/**
  * Read file content from local disk only (no SSH/remote)
  */
 function readFileContent(filePath) {
-  const expandedPath = expandPath(filePath);
+  const expandedPath = expandAndValidatePath(filePath);
   if (!existsSync(expandedPath)) {
     throw new Error(`File not found: ${filePath}`);
   }
@@ -48,7 +60,7 @@ function readFileContent(filePath) {
  * Write file content to local disk only (no SSH/remote)
  */
 function writeFileContent(filePath, content) {
-  const expandedPath = expandPath(filePath);
+  const expandedPath = expandAndValidatePath(filePath);
   writeFileSync(expandedPath, content, 'utf-8');
 }
 

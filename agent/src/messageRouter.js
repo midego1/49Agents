@@ -9,12 +9,13 @@ import { beadsService } from '../services/beads.js';
 import { folderPaneService } from '../services/folderPanes.js';
 import { getLocalMetrics } from '../services/metrics.js';
 import { performUpdate } from './updater.js';
+import { validateWorkingDirectory } from '../services/sanitize.js';
 import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync, rmdirSync, mkdirSync } from 'fs';
 
 const execAsync = promisify(exec);
-import { join, basename } from 'path';
+import { join, basename, resolve } from 'path';
 import { homedir } from 'os';
 
 // Get local hostname
@@ -27,6 +28,17 @@ function expandHome(p) {
   if (p === '~' || p === '~/') return homedir();
   if (p.startsWith('~/')) return join(homedir(), p.slice(2));
   return p;
+}
+
+/**
+ * Expand ~ and validate that the resolved path is within allowed directories.
+ * Prevents path traversal attacks on file operation endpoints.
+ */
+function expandAndValidatePath(p) {
+  const expanded = expandHome(p);
+  const resolved = resolve(expanded);
+  validateWorkingDirectory(resolved);
+  return resolved;
 }
 
 /**
@@ -217,7 +229,7 @@ export function createMessageRouter(sendToRelay, options = {}) {
         // === File browsing ===
         case 'GET /api/files/browse': {
           const dirPath = query.path || '~';
-          const resolvedPath = expandHome(dirPath);
+          const resolvedPath = expandAndValidatePath(dirPath);
           const items = readdirSync(resolvedPath);
           let entries = [];
           for (const name of items) {
@@ -243,7 +255,7 @@ export function createMessageRouter(sendToRelay, options = {}) {
           if (!filePath) {
             return respond(400, { error: 'path parameter required' });
           }
-          const resolvedPath = expandHome(filePath);
+          const resolvedPath = expandAndValidatePath(filePath);
           const content = readFileSync(resolvedPath, 'utf-8');
           const fileName = resolvedPath.split('/').pop() || basename(resolvedPath);
           return respond(200, { content, fileName, filePath: resolvedPath, device: localHostname });
@@ -253,7 +265,7 @@ export function createMessageRouter(sendToRelay, options = {}) {
           if (!filePath) {
             return respond(400, { error: 'path parameter required' });
           }
-          const resolvedPath = expandHome(filePath);
+          const resolvedPath = expandAndValidatePath(filePath);
           writeFileSync(resolvedPath, '', 'utf-8');
           const fileName = basename(filePath);
           return respond(200, { fileName, filePath, device: localHostname });
@@ -261,7 +273,7 @@ export function createMessageRouter(sendToRelay, options = {}) {
         case 'DELETE /api/files/delete': {
           const { path: filePath } = body;
           if (!filePath) return respond(400, { error: 'path parameter required' });
-          const resolvedPath = expandHome(filePath);
+          const resolvedPath = expandAndValidatePath(filePath);
           const stat = statSync(resolvedPath);
           if (stat.isDirectory()) {
             rmdirSync(resolvedPath);
@@ -273,13 +285,15 @@ export function createMessageRouter(sendToRelay, options = {}) {
         case 'POST /api/files/rename': {
           const { oldPath, newPath } = body;
           if (!oldPath || !newPath) return respond(400, { error: 'oldPath and newPath required' });
-          renameSync(expandHome(oldPath), expandHome(newPath));
-          return respond(200, { success: true, newPath: expandHome(newPath) });
+          const resolvedOld = expandAndValidatePath(oldPath);
+          const resolvedNew = expandAndValidatePath(newPath);
+          renameSync(resolvedOld, resolvedNew);
+          return respond(200, { success: true, newPath: resolvedNew });
         }
         case 'POST /api/files/mkdir': {
           const { path: dirPath } = body;
           if (!dirPath) return respond(400, { error: 'path parameter required' });
-          const resolvedPath = expandHome(dirPath);
+          const resolvedPath = expandAndValidatePath(dirPath);
           mkdirSync(resolvedPath, { recursive: true });
           return respond(200, { success: true, path: resolvedPath });
         }

@@ -43,6 +43,7 @@ export function upsertNote(userId, noteId, content, fontSize, images) {
       font_size = excluded.font_size,
       images = excluded.images,
       updated_at = datetime('now')
+    WHERE user_id = excluded.user_id
   `).run(noteId, userId, content || '', fontSize ?? 14, imagesJson);
 }
 
