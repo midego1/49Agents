@@ -2742,9 +2742,6 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
               // Viewport is now stuck in scrollback — scroll to bottom
               // so the live screen (painted by tmux) is visible immediately.
               termInfo.xterm.scrollToBottom();
-              // Clear stale scrollback after tmux repaints so TUI apps
-              // don't have orphaned history that causes scroll-past issues.
-              setTimeout(() => termInfo.xterm.clear(), 1000);
             });
           } else if (termInfo) {
             console.log(`[DBG-HISTORY] Skipping duplicate history for ${payload.terminalId.slice(0,8)}`);
