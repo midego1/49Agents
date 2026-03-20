@@ -8193,18 +8193,8 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
         return;
       }
 
-      // --- DEBUG SCROLL ---
-      const isAlt = xterm.buffer.active === xterm.buffer.alternate;
-      const baseY = xterm.buffer.active.baseY;
-      const viewportY = xterm.buffer.active.viewportY;
-      const mouseActive = !!xterm._core?.coreMouseService?.areMouseEventsActive;
-      const bufLength = xterm.buffer.active.length;
-      console.log(`[SCROLL] alt=${isAlt} mouseReport=${mouseActive} baseY=${baseY} viewportY=${viewportY} bufLen=${bufLength} deltaY=${e.deltaY.toFixed(0)}`);
-      // --- END DEBUG ---
-
       // TUI app has mouse reporting enabled — re-dispatch to xterm's element
-      if (mouseActive) {
-        console.log('[SCROLL] -> mouse-reporting path (re-dispatch to xterm)');
+      if (xterm._core?.coreMouseService?.areMouseEventsActive) {
         const xtermEl = container.querySelector('.xterm-screen');
         if (xtermEl) {
           const clone = new WheelEvent('wheel', e);
@@ -8223,14 +8213,11 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
       // If there's no scrollback (fullscreen app like nano/vim/less owns the
       // screen, or tmux just repainted after resize), send arrow keys instead
       // so the running application receives the scroll as navigation input.
-      const hasScrollback = baseY > 0;
-      if (hasScrollback) {
-        console.log(`[SCROLL] -> scrollLines(${lines}) [has scrollback]`);
+      if (xterm.buffer.active.baseY > 0) {
         xterm.scrollLines(lines);
       } else {
         const count = Math.abs(lines);
         const arrow = e.deltaY > 0 ? '\x1b[B' : '\x1b[A';
-        console.log(`[SCROLL] -> arrow keys x${count} [no scrollback, sending ${e.deltaY > 0 ? 'DOWN' : 'UP'}]`);
         const termRef = terminals.get(paneData.id);
         if (termRef?._attached) {
           const seq = arrow.repeat(count);
