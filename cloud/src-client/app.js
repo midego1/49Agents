@@ -4105,7 +4105,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <span class="connection-status disconnected" data-tooltip="Disconnected"></span>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content"></div>
@@ -5346,7 +5346,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             <button class="pane-zoom-btn zoom-in" data-tooltip="Zoom in">+</button>
           </div>
           <button class="pane-expand" aria-label="Expand pane" data-tooltip="Expand">⛶</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content">
@@ -5899,14 +5899,14 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="beads-tag-btn" aria-label="Set beads issue" data-tooltip="Set beads issue"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="0">${ICON_BEADS}</svg></button>
-          <button class="term-refresh-history" aria-label="Reload history" data-tooltip="Reload history"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3a7 7 0 1 0 1 5"/><polyline points="14 1 14 5 10 5"/></svg></button>
+          <button class="term-refresh-history" aria-label="Reload history" data-tooltip="Reload history"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 3a7 7 0 1 0 1 5"/><polyline points="14 1 14 5 10 5"/></svg></button>
           <div class="pane-zoom-controls">
             <button class="pane-zoom-btn zoom-out" data-tooltip="Zoom out">−</button>
             <button class="pane-zoom-btn zoom-in" data-tooltip="Zoom in">+</button>
           </div>
           <span class="connection-status connecting" data-tooltip="Connecting"></span>
           <button class="pane-expand" aria-label="Expand pane" data-tooltip="Expand">⛶</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content">
@@ -5964,7 +5964,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             <button class="pane-zoom-btn zoom-in" data-tooltip="Zoom in">+</button>
           </div>
           <button class="pane-expand" aria-label="Expand pane" data-tooltip="Expand">⛶</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content">
@@ -6431,7 +6431,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             <button class="pane-zoom-btn zoom-in" data-tooltip="Zoom in">+</button>
           </div>
           <button class="note-text-only-btn" aria-label="Preview markdown" data-tooltip="Preview markdown">\u{1F441}</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content">
@@ -6627,11 +6627,11 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="pane-mention-btn" data-tooltip="Mention in Claude Code">@</button>
-          <button class="iframe-refresh" aria-label="Refresh" data-tooltip="Refresh"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 3a7 7 0 1 0 1 5"/><polyline points="14 1 14 5 10 5"/></svg></button>
+          <button class="iframe-refresh" aria-label="Refresh" data-tooltip="Refresh"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 3a7 7 0 1 0 1 5"/><polyline points="14 1 14 5 10 5"/></svg></button>
           <button class="iframe-open-external" aria-label="Open in browser" data-tooltip="Open in browser"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2h4v4"/><path d="M14 2L7 9"/><path d="M13 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4"/></svg></button>
           <button class="iframe-edit-url" aria-label="Edit URL" data-tooltip="Edit URL"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 2l3 3-8 8H3v-3z"/></svg></button>
           <button class="pane-expand" aria-label="Expand pane">⛶</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content">
@@ -6815,7 +6815,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             <button class="pane-zoom-btn zoom-in" data-tooltip="Zoom in">+</button>
           </div>
           <button class="pane-expand" aria-label="Expand pane" data-tooltip="Expand">\u26F6</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="pane-content">
@@ -6917,7 +6917,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
             <button class="pane-zoom-btn zoom-in" data-tooltip="Zoom in">+</button>
           </div>
           <button class="pane-expand" aria-label="Expand pane" data-tooltip="Expand">\u26F6</button>
-          <button class="pane-close" aria-label="Close pane">&times;</button>
+          <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
       </div>
       <div class="folder-git-bar" style="display:none;">

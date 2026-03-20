@@ -692,14 +692,14 @@ body.minimap-hidden #controls {
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.4);
-  font-size: 18px;
   cursor: pointer;
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
-  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 .pane-close:hover {
