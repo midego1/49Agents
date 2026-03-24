@@ -287,7 +287,7 @@ start_cloud() {
 
   # Kill any orphan on the port
   local orphan
-  orphan=$(lsof -ti:"$CLOUD_PORT" 2>/dev/null || true)
+  orphan=$(lsof -ti:"$CLOUD_PORT" -sTCP:LISTEN 2>/dev/null || true)
   if [ -n "$orphan" ]; then
     echo -e "  ${YELLOW}Killing orphan process on port ${CLOUD_PORT} (PID ${orphan})${NC}"
     kill -9 $orphan 2>/dev/null || true
@@ -348,7 +348,7 @@ cmd_stop() {
   # Also kill any orphans on the configured port
   load_config
   local orphan
-  orphan=$(lsof -ti:"$CLOUD_PORT" 2>/dev/null || true)
+  orphan=$(lsof -ti:"$CLOUD_PORT" -sTCP:LISTEN 2>/dev/null || true)
   if [ -n "$orphan" ]; then
     echo -e "  Killing orphan on port ${CLOUD_PORT} (PID ${orphan})"
     kill -9 $orphan 2>/dev/null || true
@@ -431,7 +431,7 @@ cmd_cloud_stop() {
   kill_by_pidfile "$CLOUD_PID_FILE" "Cloud server"
   load_config
   local orphan
-  orphan=$(lsof -ti:"$CLOUD_PORT" 2>/dev/null || true)
+  orphan=$(lsof -ti:"$CLOUD_PORT" -sTCP:LISTEN 2>/dev/null || true)
   if [ -n "$orphan" ]; then
     echo -e "  Killing orphan on port ${CLOUD_PORT} (PID ${orphan})"
     kill -9 $orphan 2>/dev/null || true
