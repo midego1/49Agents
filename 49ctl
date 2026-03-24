@@ -316,7 +316,17 @@ start_agent() {
     return
   fi
 
-  echo -e "  Starting agent..."
+  # Check for rogue agent processes not tracked by 49ctl
+  local rogues
+  rogues=$(pgrep -f "49-agent.js start" 2>/dev/null || true)
+  if [ -n "$rogues" ]; then
+    echo -e "  ${YELLOW}Found existing agent process(es) not started by 49ctl: ${rogues}${NC}"
+    echo -e "  ${YELLOW}Killing them to avoid duplicate connections...${NC}"
+    echo "$rogues" | xargs kill 2>/dev/null || true
+    sleep 1
+  fi
+
+  echo -e "  Starting agent (connecting to ${AGENT_CLOUD_URL})..."
   TC_CLOUD_URL="$AGENT_CLOUD_URL" nohup node "$SCRIPT_DIR/agent/bin/49-agent.js" start >> "$AGENT_LOG" 2>&1 &
   local pid=$!
   echo "$pid" > "$AGENT_PID_FILE"

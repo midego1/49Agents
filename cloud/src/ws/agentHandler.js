@@ -113,7 +113,8 @@ export function handleAgentConnection(ws, userAgents, userBrowsers, latestAgentV
             recordEvent('agent.connect', userId, {
               agentId, hostname: msg.payload.hostname, os: agentOs, version: msg.payload.version || null,
             });
-            console.log(`[ws:agent] Authenticated: ${agentId} (${msg.payload.hostname}) for user ${userId}`);
+            const connType = isReconnect ? 'reconnected' : 'new connection';
+            console.log(`[ws:agent] Authenticated: ${agentId} (${msg.payload.hostname}) for user ${userId} [${connType}]`);
 
             // Notify all browsers for this user that the agent is online
             broadcastToBrowsers(userId, userBrowsers, {

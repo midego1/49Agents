@@ -120,6 +120,7 @@ export async function startAgent(options = {}) {
 
   console.log(`[Agent] Starting 49Agents Agent v${config.version}`);
   console.log(`[Agent] Cloud relay: ${cloudUrl}`);
+  console.log(`[Agent] Using saved auth token from ${config.configDir}/agent.json`);
 
   // Event loop lag detector — logs when the loop is blocked for >500ms
   let lastTick = Date.now();

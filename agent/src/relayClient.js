@@ -80,7 +80,7 @@ export class RelayClient extends EventEmitter {
 
     switch (type) {
       case MSG.AGENT_AUTH_OK:
-        console.log('[RelayClient] Authentication successful');
+        console.log(`[RelayClient] Authentication successful — agent registered as "${os.hostname()}" (${payload?.agentId || 'unknown'})`);
         this.authenticated = true;
         this.emit('authenticated', payload);
         break;
