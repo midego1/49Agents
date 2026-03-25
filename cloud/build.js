@@ -10,7 +10,7 @@ const srcDir = join(__dirname, 'src-client');
 const publicDir = join(__dirname, 'public');
 
 // Files to process
-const targets = ['app.js', 'themes.js', 'analytics.js', 'tutorial.js', 'tutorial-getting-started.js', 'tutorial-panes.js'];
+const targets = ['app.js', 'themes.js', 'analytics.js', 'tutorial.js', 'tutorial-getting-started.js', 'tutorial-panes.js', 'dev-panel.js'];
 
 // Obfuscator config — focused on making code unreadable without bloating size
 const obfuscatorOptions = {

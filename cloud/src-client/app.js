@@ -11434,16 +11434,29 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     init();
   }
 
-  // Debug helper - expose internals for debugging
+  // Debug helper - expose internals for debugging and dev mode
   window.TC2_DEBUG = {
     get terminals() { return terminals; },
     get state() { return state; },
     get ws() { return ws; },
+    get agents() { return agents; },
     testInput: (terminalId, text) => {
       const termInfo = terminals.get(terminalId);
       if (termInfo) {
         sendWs('terminal:input', { terminalId, data: btoa(unescape(encodeURIComponent(text))) }, getPaneAgentId(terminalId));
       }
-    }
+    },
+    // Dev mode hooks
+    showToast,
+    dismissToast,
+    handleStateTransition,
+    updateClaudeStates,
+    playNotificationSound,
+    playDismissSound,
+    renderPane,
+    deletePane,
+    updateCanvasTransform,
+    renderHud,
+    PANE_DEFAULTS,
   };
 })();
