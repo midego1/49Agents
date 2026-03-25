@@ -15,9 +15,11 @@ try {
   // Use default version
 }
 
+const defaultDir = join(homedir(), '.49agents');
+
 export const config = {
   cloudUrl: process.env.TC_CLOUD_URL || 'ws://localhost:1071',
-  configDir: join(homedir(), '.49agents'),
-  dataDir: join(homedir(), '.49agents'),
+  configDir: process.env.TC_CONFIG_DIR || defaultDir,
+  dataDir: process.env.TC_CONFIG_DIR || defaultDir,
   version,
 };

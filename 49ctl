@@ -699,6 +699,135 @@ cmd_clear_logs() {
   echo ""
 }
 
+# ── Dev Mode ──
+# Runs cloud + agent on a custom port with ISOLATED state.
+# Does NOT touch ~/.49agents/ or the main cloud/data/ database.
+# Safe to run alongside a production instance on port 1071.
+
+cmd_dev() {
+  local port="${1:-1075}"
+  local dev_dir="$STATE_DIR/dev-${port}"
+  local dev_db="$dev_dir/tc.db"
+  local dev_agent_config="$dev_dir/agent-config"
+  local dev_cloud_log="$dev_dir/cloud.log"
+  local dev_agent_log="$dev_dir/agent.log"
+  local dev_cloud_pid="$dev_dir/cloud.pid"
+  local dev_agent_pid="$dev_dir/agent.pid"
+
+  mkdir -p "$dev_dir" "$dev_agent_config"
+
+  echo ""
+  echo -e "${CYAN}${BOLD}49Agents Dev Mode${NC} — port ${port}"
+  echo -e "${DIM}Isolated state in ${dev_dir}${NC}"
+  echo "-----------------------------"
+
+  # Kill any existing dev processes for this port
+  if [ -f "$dev_cloud_pid" ]; then
+    local old_pid
+    old_pid=$(cat "$dev_cloud_pid" 2>/dev/null)
+    if is_alive "$old_pid"; then
+      echo -e "  ${YELLOW}Stopping previous dev cloud (PID ${old_pid})${NC}"
+      kill "$old_pid" 2>/dev/null
+      sleep 1
+    fi
+    rm -f "$dev_cloud_pid"
+  fi
+  if [ -f "$dev_agent_pid" ]; then
+    local old_pid
+    old_pid=$(cat "$dev_agent_pid" 2>/dev/null)
+    if is_alive "$old_pid"; then
+      echo -e "  ${YELLOW}Stopping previous dev agent (PID ${old_pid})${NC}"
+      kill "$old_pid" 2>/dev/null
+      sleep 1
+    fi
+    rm -f "$dev_agent_pid"
+  fi
+
+  # Also kill any listener on the port
+  local orphan
+  orphan=$(lsof -ti:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  if [ -n "$orphan" ]; then
+    echo -e "  ${YELLOW}Killing orphan on port ${port} (PID ${orphan})${NC}"
+    kill -9 $orphan 2>/dev/null || true
+    sleep 1
+  fi
+
+  # Build assets if needed
+  if [ ! -f "$SCRIPT_DIR/cloud/public/app.min.js" ]; then
+    echo -e "  ${YELLOW}Building client assets...${NC}"
+    (cd "$SCRIPT_DIR/cloud" && npm run build --silent 2>&1)
+  fi
+  if [ ! -f "$SCRIPT_DIR/cloud/dl/49-agent.tar.gz" ]; then
+    echo -e "  ${YELLOW}Building agent tarball...${NC}"
+    mkdir -p "$SCRIPT_DIR/cloud/dl"
+    tar czf "$SCRIPT_DIR/cloud/dl/49-agent.tar.gz" -C "$SCRIPT_DIR" agent/
+  fi
+
+  # Start cloud server with isolated database
+  echo -e "  Starting cloud server on port ${port}..."
+  PORT="$port" DATABASE_PATH="$dev_db" nohup node "$SCRIPT_DIR/cloud/src/index.js" >> "$dev_cloud_log" 2>&1 &
+  local cloud_pid=$!
+  echo "$cloud_pid" > "$dev_cloud_pid"
+  sleep 2
+
+  if ! is_alive "$cloud_pid"; then
+    echo -e "  ${RED}Cloud server failed to start. Check: tail $dev_cloud_log${NC}"
+    return 1
+  fi
+  echo -e "  ${GREEN}Cloud started${NC} ${DIM}(PID ${cloud_pid})${NC}"
+
+  # Start agent with isolated config directory (separate token + terminal state)
+  echo -e "  Starting agent (isolated config: ${dev_agent_config})..."
+  TC_CLOUD_URL="ws://localhost:${port}" TC_CONFIG_DIR="$dev_agent_config" \
+    nohup node "$SCRIPT_DIR/agent/bin/49-agent.js" start >> "$dev_agent_log" 2>&1 &
+  local agent_pid=$!
+  echo "$agent_pid" > "$dev_agent_pid"
+  sleep 2
+
+  if ! is_alive "$agent_pid"; then
+    echo -e "  ${RED}Agent failed to start. Check: tail $dev_agent_log${NC}"
+    echo -e "  ${DIM}Cloud is still running — use the browser without an agent, or use ?dev=true${NC}"
+  else
+    echo -e "  ${GREEN}Agent started${NC} ${DIM}(PID ${agent_pid})${NC}"
+  fi
+
+  echo ""
+  echo -e "${GREEN}${BOLD}Dev instance running!${NC}"
+  echo -e "  URL:     ${CYAN}http://localhost:${port}${NC}"
+  echo -e "  DevPanel: ${CYAN}http://localhost:${port}?dev=true${NC}"
+  echo -e "  Logs:    ${DIM}tail -f $dev_cloud_log $dev_agent_log${NC}"
+  echo -e "  State:   ${DIM}$dev_dir${NC}"
+  echo ""
+  echo -e "  ${DIM}This instance is fully isolated from your main install.${NC}"
+  echo -e "  ${DIM}Stop with: ./49ctl dev-stop ${port}${NC}"
+  echo ""
+}
+
+cmd_dev_stop() {
+  local port="${1:-1075}"
+  local dev_dir="$STATE_DIR/dev-${port}"
+  local dev_cloud_pid="$dev_dir/cloud.pid"
+  local dev_agent_pid="$dev_dir/agent.pid"
+
+  echo ""
+  if [ -f "$dev_cloud_pid" ]; then
+    kill_by_pidfile "$dev_cloud_pid" "Dev cloud (port ${port})"
+  fi
+  if [ -f "$dev_agent_pid" ]; then
+    kill_by_pidfile "$dev_agent_pid" "Dev agent (port ${port})"
+  fi
+
+  local orphan
+  orphan=$(lsof -ti:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  if [ -n "$orphan" ]; then
+    echo -e "  Killing orphan on port ${port} (PID ${orphan})"
+    kill -9 $orphan 2>/dev/null || true
+  fi
+
+  echo -e "  ${GREEN}Dev instance on port ${port} stopped.${NC}"
+  echo ""
+}
+
 cmd_help() {
   echo ""
   echo -e "${BOLD}49ctl${NC} — 49Agents Process Manager"
@@ -719,6 +848,10 @@ cmd_help() {
   echo "  cloud-stop     Stop only the cloud server"
   echo "  agent-start    Start only the agent"
   echo "  agent-stop     Stop only the agent"
+  echo ""
+  echo -e "${BOLD}Development:${NC}"
+  echo "  dev [port]     Start isolated dev instance (default: 1075)"
+  echo "  dev-stop [port]  Stop dev instance"
   echo ""
   echo -e "${BOLD}Session & State:${NC}"
   echo "  session        Show all persistent state (tokens, DB, terminals, config)"
@@ -750,6 +883,8 @@ case "$COMMAND" in
   cloud-stop)      cmd_cloud_stop ;;
   agent-start)     cmd_agent_start ;;
   agent-stop)      cmd_agent_stop ;;
+  dev)             cmd_dev "$@" ;;
+  dev-stop)        cmd_dev_stop "$@" ;;
   session)         cmd_session ;;
   reset-agent)     cmd_reset_agent ;;
   reset-terminals) cmd_reset_terminals ;;
