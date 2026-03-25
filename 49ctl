@@ -455,7 +455,37 @@ cmd_agent_start() {
 }
 
 cmd_agent_stop() {
-  kill_by_pidfile "$AGENT_PID_FILE" "Agent"
+  local found=false
+
+  # Try PID file first
+  if [ -f "$AGENT_PID_FILE" ]; then
+    kill_by_pidfile "$AGENT_PID_FILE" "Agent"
+    found=true
+  fi
+
+  # Also find any agent processes not tracked by 49ctl
+  local pids
+  pids=$(pgrep -f "49-agent.js start" 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    echo "$pids" | while read -r pid; do
+      echo -e "  Stopping agent process (PID ${pid})..."
+      kill "$pid" 2>/dev/null
+    done
+    sleep 1
+    # Force kill any survivors
+    pids=$(pgrep -f "49-agent.js start" 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+      echo "$pids" | while read -r pid; do
+        kill -9 "$pid" 2>/dev/null
+      done
+    fi
+    echo -e "  ${GREEN}Agent stopped.${NC}"
+    found=true
+  fi
+
+  if [ "$found" = "false" ]; then
+    echo -e "  ${DIM}No agent process found.${NC}"
+  fi
 }
 
 # ── Session / State Commands ──
