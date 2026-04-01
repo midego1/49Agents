@@ -437,6 +437,10 @@ export async function fetchGitGraphData(paneEl, paneData) {
       statusEl.innerHTML = `<span class="git-graph-dirty">&#x25cf; ${u.total} uncommitted</span>${detailHtml}`;
     }
 
+    // Preserve scroll position across re-renders
+    const scrollEl = outputEl.querySelector('.gg-scroll-container');
+    const prevScrollTop = scrollEl ? scrollEl.scrollTop : 0;
+
     if (data.commits) {
       if (paneData.graphMode === 'ascii' && data.asciiGraph) {
         renderAsciiGitGraph(outputEl, data.asciiGraph, data.commits);
@@ -445,6 +449,12 @@ export async function fetchGitGraphData(paneEl, paneData) {
       }
     } else if (data.graphHtml) {
       outputEl.innerHTML = `<pre style="margin:0;padding:8px 10px;white-space:pre;font-family:inherit;font-size:inherit;color:inherit;">${data.graphHtml}</pre>`;
+    }
+
+    // Restore scroll position
+    if (prevScrollTop > 0) {
+      const newScrollEl = outputEl.querySelector('.gg-scroll-container');
+      if (newScrollEl) newScrollEl.scrollTop = prevScrollTop;
     }
   } catch (e) {
     console.error('[App] Failed to fetch git graph data:', e);
