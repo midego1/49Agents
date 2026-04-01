@@ -394,6 +394,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
       if (pane.url) metadata.url = pane.url;
       if (pane.repoPath) metadata.repoPath = pane.repoPath;
       if (pane.repoName) metadata.repoName = pane.repoName;
+      if (pane.graphMode && pane.graphMode !== 'svg') metadata.graphMode = pane.graphMode;
       if (pane.projectPath) metadata.projectPath = pane.projectPath;
       if (pane.claudeSessionId) metadata.claudeSessionId = pane.claudeSessionId;
       if (pane.claudeSessionName) metadata.claudeSessionName = pane.claudeSessionName;
@@ -1790,7 +1791,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
     });
     initGitGraphDeps({
       getNextShortcutNumber, deviceLabelHtml, paneNameHtml, shortcutBadgeHtml,
-      setupPaneListeners, agentRequest, gitGraphPanes,
+      setupPaneListeners, agentRequest, gitGraphPanes, cloudSaveLayout,
       getCanvas: () => canvas,
     });
 
@@ -3606,6 +3607,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
             if (meta.url) pane.url = meta.url;
             if (meta.repoPath) pane.repoPath = meta.repoPath;
             if (meta.repoName) pane.repoName = meta.repoName;
+            if (meta.graphMode) pane.graphMode = meta.graphMode;
             if (meta.projectPath) pane.projectPath = meta.projectPath;
             if (meta.beadsTag) pane.beadsTag = meta.beadsTag;
             if (meta.workingDir) pane.workingDir = meta.workingDir;

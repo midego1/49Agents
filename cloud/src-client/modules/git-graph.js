@@ -14,6 +14,16 @@ const GG = {
   COLORS: ['#85e89d','#79b8ff','#b392f0','#ffab70','#f97583','#4ec9b0','#d1bcf9','#ffd33d'],
 };
 
+// ── ASCII Graph Characters ──
+const ASCII = {
+  NODE: '*',
+  VERT: '|',
+  MERGE_RIGHT: '\\',
+  MERGE_LEFT: '/',
+  HORIZ: '_',
+  EMPTY: ' ',
+};
+
 export function renderGitGraphPane(paneData) {
   const existingPane = document.getElementById(`pane-${paneData.id}`);
   if (existingPane) existingPane.remove();
@@ -53,6 +63,7 @@ export function renderGitGraphPane(paneData) {
         <div class="git-graph-header">
           <span class="git-graph-branch"></span>
           <span class="git-graph-status"></span>
+          <button class="git-graph-mode-btn" data-tooltip="Toggle SVG/ASCII mode">${paneData.graphMode === 'ascii' ? 'SVG' : 'ASCII'}</button>
           <button class="git-graph-push-btn" data-tooltip="Push to remote"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style="vertical-align: middle; margin-right: 3px;"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>Push</button>
         </div>
         <div class="git-graph-output"><span class="git-graph-loading">Loading git graph...</span></div>
@@ -71,6 +82,17 @@ export function renderGitGraphPane(paneData) {
 function setupGitGraphListeners(paneEl, paneData) {
   const graphOutput = paneEl.querySelector('.git-graph-output');
   const pushBtn = paneEl.querySelector('.git-graph-push-btn');
+  const modeBtn = paneEl.querySelector('.git-graph-mode-btn');
+
+  if (!paneData.graphMode) paneData.graphMode = 'svg';
+
+  modeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    paneData.graphMode = paneData.graphMode === 'svg' ? 'ascii' : 'svg';
+    modeBtn.textContent = paneData.graphMode === 'ascii' ? 'SVG' : 'ASCII';
+    _ctx.cloudSaveLayout(paneData);
+    fetchGitGraphData(paneEl, paneData);
+  });
 
   pushBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -274,6 +296,117 @@ export function renderSvgGitGraph(outputEl, commits, currentBranch) {
     </div>`;
 }
 
+export function renderAsciiGitGraph(outputEl, commits, currentBranch) {
+  if (!commits || commits.length === 0) {
+    outputEl.innerHTML = '<span class="git-graph-loading">No commits found</span>';
+    return;
+  }
+
+  const { lanes, maxLane, branchColors } = assignLanes(commits);
+  const totalLanes = maxLane + 1;
+
+  // Build the active lanes state to draw continuation lines
+  const activeLanes = new Array(totalLanes).fill(null);
+  const hashIndex = new Map();
+  commits.forEach((c, i) => hashIndex.set(c.hash, i));
+
+  const rowsHtml = commits.map((commit, i) => {
+    const lane = lanes.get(commit.hash);
+    const colorIdx = branchColors.get(lane) ?? 1;
+    const color = GG.COLORS[colorIdx];
+    const timeStr = commit.timestamp ? gitRelativeTime(commit.timestamp) : '';
+
+    // Build ASCII graph columns for this row
+    const cols = [];
+    for (let l = 0; l < totalLanes; l++) {
+      if (l === lane) {
+        cols.push({ char: ASCII.NODE, color });
+      } else if (activeLanes[l] !== null) {
+        const laneColor = GG.COLORS[branchColors.get(l) ?? 1];
+        cols.push({ char: ASCII.VERT, color: laneColor });
+      } else {
+        cols.push({ char: ASCII.EMPTY, color: null });
+      }
+    }
+
+    // Build merge lines: if this commit has parents in other lanes, show merge chars
+    // between the node and the parent lane
+    const mergeOverrides = new Map();
+    for (const parentHash of commit.parents) {
+      const parentLane = lanes.get(parentHash);
+      if (parentLane === undefined || parentLane === lane) continue;
+      const mergeChar = parentLane > lane ? ASCII.MERGE_RIGHT : ASCII.MERGE_LEFT;
+      const mergeColor = GG.COLORS[branchColors.get(parentLane) ?? 1];
+      const lo = Math.min(lane, parentLane);
+      const hi = Math.max(lane, parentLane);
+      for (let l = lo + 1; l < hi; l++) {
+        if (cols[l].char === ASCII.EMPTY) {
+          mergeOverrides.set(l, { char: ASCII.HORIZ, color: mergeColor });
+        }
+      }
+      if (cols[parentLane].char !== ASCII.NODE) {
+        mergeOverrides.set(parentLane, { char: mergeChar, color: mergeColor });
+      }
+    }
+
+    // Apply merge overrides
+    for (const [l, v] of mergeOverrides) {
+      cols[l] = v;
+    }
+
+    // Update active lanes for next row
+    activeLanes[lane] = null;
+    if (commit.parents.length > 0) {
+      const firstParent = commit.parents[0];
+      if (hashIndex.has(firstParent) && !lanes.has(firstParent)) {
+        // not yet assigned — will continue in this lane
+      }
+      activeLanes[lane] = firstParent;
+      for (let p = 1; p < commit.parents.length; p++) {
+        const ph = commit.parents[p];
+        const pl = lanes.get(ph);
+        if (pl !== undefined) activeLanes[pl] = ph;
+      }
+    }
+
+    // Render graph portion as colored spans
+    const graphHtml = cols.map(c => {
+      if (c.char === ASCII.EMPTY) return ' ';
+      return `<span style="color:${c.color}">${c.char}</span>`;
+    }).join('');
+
+    // Refs
+    let refsHtml = '';
+    if (commit.refs) {
+      const refParts = commit.refs.split(',').map(r => r.trim()).filter(Boolean);
+      for (const ref of refParts) {
+        if (ref.startsWith('HEAD -> ')) {
+          refsHtml += `<span class="gg-ref gg-ref-head">${escapeHtml(ref.replace('HEAD -> ', ''))}</span>`;
+        } else if (ref.startsWith('tag: ')) {
+          refsHtml += `<span class="gg-ref gg-ref-tag">${escapeHtml(ref.replace('tag: ', ''))}</span>`;
+        } else if (ref.startsWith('origin/')) {
+          refsHtml += `<span class="gg-ref gg-ref-remote">${escapeHtml(ref)}</span>`;
+        } else {
+          refsHtml += `<span class="gg-ref gg-ref-branch">${escapeHtml(ref)}</span>`;
+        }
+      }
+    }
+
+    return `<div class="gg-row gg-ascii-row" style="height:${GG.ROW_H}px">
+      <span class="gg-ascii-graph">${graphHtml} </span>
+      <span class="gg-info">
+        <span class="gg-hash" style="color:${color}">${commit.hash}</span>
+        <span class="gg-time">${timeStr}</span>
+        ${refsHtml}
+        <span class="gg-subject">${escapeHtml(commit.subject || '')}</span>
+        <span class="gg-author">${escapeHtml(commit.author || '')}</span>
+      </span>
+    </div>`;
+  }).join('');
+
+  outputEl.innerHTML = `<div class="gg-scroll-container gg-ascii-container">${rowsHtml}</div>`;
+}
+
 export async function fetchGitGraphData(paneEl, paneData) {
   try {
     const outputEl = paneEl.querySelector('.git-graph-output');
@@ -303,7 +436,11 @@ export async function fetchGitGraphData(paneEl, paneData) {
     }
 
     if (data.commits) {
-      renderSvgGitGraph(outputEl, data.commits, data.branch);
+      if (paneData.graphMode === 'ascii') {
+        renderAsciiGitGraph(outputEl, data.commits, data.branch);
+      } else {
+        renderSvgGitGraph(outputEl, data.commits, data.branch);
+      }
     } else if (data.graphHtml) {
       outputEl.innerHTML = `<pre style="margin:0;padding:8px 10px;white-space:pre;font-family:inherit;font-size:inherit;color:inherit;">${data.graphHtml}</pre>`;
     }
