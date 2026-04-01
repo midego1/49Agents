@@ -8,15 +8,19 @@ let _ctx = null;
 
 export function initGitGraphDeps(ctx) { _ctx = ctx; }
 
-// ── SVG Graph Constants ──
+// ── SVG Graph Constants (matching mhutchie/vscode-git-graph) ──
 const GG = {
-  ROW_H: 24, LANE_W: 16, NODE_R: 4, MERGE_R_OUTER: 5.5, MERGE_R_INNER: 2.5,
-  LEFT_PAD: 16, LINE_W: 2, SHADOW_W: 4,
-  // 12-color palette matching mhutchie/vscode-git-graph
+  GRID_X: 16, GRID_Y: 24, OFFSET_X: 16, OFFSET_Y: 12,
+  NODE_R: 4, LINE_W: 2, SHADOW_W: 4,
   COLORS: [
-    '#85e89d', '#0085d9', '#b392f0', '#d9008f', '#ffab70', '#00d90a',
-    '#f97583', '#d98500', '#4ec9b0', '#a300d9', '#ffd33d', '#dc5b23',
+    '#0085d9', '#d9008f', '#00d90a', '#d98500',
+    '#a300d9', '#ff0000', '#00d9cc', '#e138e8',
+    '#85d900', '#dc5b23', '#6f24d6', '#ffcc00',
   ],
+  // Legacy aliases used by row HTML and ASCII mode
+  get ROW_H() { return this.GRID_Y; },
+  get LANE_W() { return this.GRID_X; },
+  get LEFT_PAD() { return this.OFFSET_X; },
 };
 
 export function renderGitGraphPane(paneData) {
@@ -119,130 +123,189 @@ function setupGitGraphListeners(paneEl, paneData) {
   _ctx.gitGraphPanes.set(paneData.id, { refreshInterval });
 }
 
+// ── mhutchie-style path-tracing layout ──
+// Port of the determinePath algorithm from mhutchie/vscode-git-graph.
+// Each vertex tracks nextX (next available lane) and connections (what occupies each lane).
+// Branches are traced top-to-bottom, claiming lanes per-row.
+
 export function assignLanes(commits) {
+  // Legacy wrapper: runs the full layout and returns a simple lanes + branchColors map
+  const layout = layoutGraph(commits);
+  const lanes = new Map();
+  const branchColors = new Map();
+  let maxLane = 0;
+  for (const v of layout.vertices) {
+    if (v.x >= 0) {
+      lanes.set(v.hash, v.x);
+      if (v.x > maxLane) maxLane = v.x;
+      if (v.branch !== null) branchColors.set(v.x, v.branch.colour);
+    }
+  }
+  return { lanes, maxLane, branchColors };
+}
+
+function layoutGraph(commits) {
   const hashIndex = new Map();
   commits.forEach((c, i) => hashIndex.set(c.hash, i));
 
-  const lanes = new Map();       // hash -> lane index
-  const activeLanes = [];        // lane index -> expected hash (or null if free)
-  let maxLane = 0;
-  const branchColors = new Map(); // lane index -> color index
+  // Build vertices
+  const vertices = commits.map((c, i) => ({
+    id: i, hash: c.hash, x: -1,
+    children: [], parents: [], nextParent: 0,
+    branch: null, nextX: 0,
+    connections: [], // connections[laneIdx] = { connectsTo: vertexId, branch }
+    isCurrent: !!(c.refs && /HEAD/.test(c.refs)),
+    isMerge: c.parents.length > 1,
+  }));
 
-  // Color pool: track when each color was freed (row index).
-  // A color is available if it was freed before the current row.
-  const colorFreeAt = new Array(GG.COLORS.length).fill(-1); // row when color became free
-  let masterColorIdx = 0; // green for main/master
-  colorFreeAt[masterColorIdx] = Infinity; // reserve until assigned
-
-  // Find master/main HEAD commit to assign color 0
-  let masterHash = null;
-  for (const c of commits) {
-    if (c.refs && (/HEAD -> main\b/.test(c.refs) || /HEAD -> master\b/.test(c.refs))) {
-      masterHash = c.hash;
-      break;
-    }
-  }
-
-  function allocateColor(row) {
-    // Find earliest-freed color (temporal separation)
-    let bestIdx = -1, bestFreeRow = Infinity;
-    for (let c = 1; c < GG.COLORS.length; c++) { // skip 0 (reserved for master)
-      if (colorFreeAt[c] <= row && colorFreeAt[c] < bestFreeRow) {
-        bestFreeRow = colorFreeAt[c];
-        bestIdx = c;
-      }
-    }
-    if (bestIdx === -1) {
-      // All colors in use — pick the one freed longest ago (fallback)
-      bestIdx = 1;
-      for (let c = 2; c < GG.COLORS.length; c++) {
-        if (colorFreeAt[c] < colorFreeAt[bestIdx]) bestIdx = c;
-      }
-    }
-    colorFreeAt[bestIdx] = Infinity; // mark in use
-    return bestIdx;
-  }
-
-  function freeColor(colorIdx, row) {
-    if (colorIdx === masterColorIdx) return; // never free master color
-    colorFreeAt[colorIdx] = row;
-  }
-
-  for (let row = 0; row < commits.length; row++) {
-    const commit = commits[row];
-
-    // Find lane: check if any active lane expects this commit
-    let lane = -1;
-    for (let i = 0; i < activeLanes.length; i++) {
-      if (activeLanes[i] === commit.hash) { lane = i; break; }
-    }
-    if (lane === -1) {
-      // New branch — find first free lane
-      for (let i = 0; i < activeLanes.length; i++) {
-        if (activeLanes[i] === null) { lane = i; break; }
-      }
-      if (lane === -1) { lane = activeLanes.length; activeLanes.push(null); }
-    }
-
-    lanes.set(commit.hash, lane);
-    if (lane > maxLane) maxLane = lane;
-
-    // Assign color if not already set
-    if (!branchColors.has(lane)) {
-      if (commit.hash === masterHash) {
-        branchColors.set(lane, masterColorIdx);
-        colorFreeAt[masterColorIdx] = Infinity;
+  // Wire parent/child edges
+  for (let i = 0; i < commits.length; i++) {
+    for (const ph of commits[i].parents) {
+      const pi = hashIndex.get(ph);
+      if (pi !== undefined) {
+        vertices[i].parents.push(vertices[pi]);
+        vertices[pi].children.push(vertices[i]);
       } else {
-        branchColors.set(lane, allocateColor(row));
+        vertices[i].parents.push(null); // parent not in graph
       }
-    }
-
-    // Free this lane's slot
-    const oldColor = branchColors.get(lane);
-    activeLanes[lane] = null;
-
-    if (commit.parents.length > 0) {
-      const firstParent = commit.parents[0];
-      if (hashIndex.has(firstParent) && !lanes.has(firstParent)) {
-        const existingLane = activeLanes.indexOf(firstParent);
-        if (existingLane === -1) {
-          // Continue in same lane — keep same color
-          activeLanes[lane] = firstParent;
-        }
-      } else if (!hashIndex.has(firstParent)) {
-        // Parent not in our commit list — lane dies here, free color
-        freeColor(oldColor, row);
-      }
-
-      // Handle merge parents (2nd, 3rd, etc.)
-      for (let p = 1; p < commit.parents.length; p++) {
-        const parentHash = commit.parents[p];
-        if (!hashIndex.has(parentHash) || lanes.has(parentHash)) continue;
-        const existing = activeLanes.indexOf(parentHash);
-        if (existing !== -1) continue;
-        let mergeLane = -1;
-        for (let i = 0; i < activeLanes.length; i++) { if (activeLanes[i] === null) { mergeLane = i; break; } }
-        if (mergeLane === -1) { mergeLane = activeLanes.length; activeLanes.push(null); }
-        activeLanes[mergeLane] = parentHash;
-        if (mergeLane > maxLane) maxLane = mergeLane;
-        if (!branchColors.has(mergeLane)) {
-          branchColors.set(mergeLane, allocateColor(row));
-        }
-      }
-    } else {
-      // Root commit — lane dies, free color
-      freeColor(oldColor, row);
-    }
-
-    // Free colors for lanes that became empty (no longer expecting anything)
-    if (activeLanes[lane] === null && oldColor !== undefined) {
-      // Only free if we didn't re-assign this lane above
-      const stillActive = activeLanes[lane] !== null;
-      if (!stillActive) freeColor(oldColor, row);
     }
   }
 
-  return { lanes, maxLane, branchColors };
+  // Color management
+  const availableColours = []; // availableColours[colourIdx] = endRow (row where colour became free)
+  function getAvailableColour(startAt) {
+    for (let i = 0; i < availableColours.length; i++) {
+      if (startAt > availableColours[i]) return i;
+    }
+    availableColours.push(0);
+    return availableColours.length - 1;
+  }
+
+  const branches = [];
+
+  // Helper: get next available point at a vertex row
+  function getNextPoint(v) {
+    return { x: v.nextX, y: v.id };
+  }
+  function getPoint(v) {
+    return { x: v.x, y: v.id };
+  }
+  function registerUnavailable(v, x, connectsTo, branch) {
+    // Only advance nextX if this is the frontier
+    while (v.connections.length <= x) v.connections.push(null);
+    v.connections[x] = { connectsTo, branch };
+    if (x === v.nextX) v.nextX = x + 1;
+  }
+  function getPointConnectingTo(v, targetVertex, onBranch) {
+    for (let i = 0; i < v.connections.length; i++) {
+      const c = v.connections[i];
+      if (c && c.connectsTo === targetVertex.id && c.branch === onBranch) {
+        return { x: i, y: v.id };
+      }
+    }
+    return null;
+  }
+
+  function determinePath(startAt) {
+    const vertex = vertices[startAt];
+    const parentVertex = vertex.nextParent < vertex.parents.length ? vertex.parents[vertex.nextParent] : null;
+
+    let lastPoint = vertex.branch === null ? getNextPoint(vertex) : getPoint(vertex);
+
+    // CASE A: Merge line — vertex on a branch, parent on a branch
+    if (parentVertex !== null && parentVertex !== null /* not null-parent */ &&
+        vertex.isMerge && vertex.branch !== null && parentVertex.branch !== null) {
+
+      const parentBranch = parentVertex.branch;
+      let foundTarget = false;
+
+      for (let i = startAt + 1; i < vertices.length; i++) {
+        const cur = vertices[i];
+        let curPoint = getPointConnectingTo(cur, parentVertex, parentBranch);
+        if (curPoint !== null) {
+          foundTarget = true;
+        } else {
+          curPoint = getNextPoint(cur);
+        }
+
+        parentBranch.lines.push({ p1: lastPoint, p2: curPoint });
+        registerUnavailable(cur, curPoint.x, parentVertex.id, parentBranch);
+        lastPoint = curPoint;
+
+        if (foundTarget) {
+          vertex.nextParent++;
+          break;
+        }
+      }
+      return;
+    }
+
+    // CASE B: Normal branch
+    const branch = { colour: getAvailableColour(startAt), end: startAt, lines: [] };
+    vertex.branch = branch;
+    vertex.x = lastPoint.x;
+    registerUnavailable(vertex, lastPoint.x, vertex.id, branch);
+
+    let curVertex = vertex;
+    let curParent = parentVertex;
+
+    for (let i = startAt + 1; i < vertices.length; i++) {
+      const cur = vertices[i];
+      let curPoint;
+
+      if (curParent === cur && cur.branch !== null) {
+        curPoint = getPoint(cur);
+      } else {
+        curPoint = getNextPoint(cur);
+      }
+
+      branch.lines.push({ p1: lastPoint, p2: curPoint });
+      registerUnavailable(cur, curPoint.x, curParent ? curParent.id : -1, branch);
+      lastPoint = curPoint;
+
+      if (curParent === cur) {
+        curVertex.nextParent++;
+        const wasOnBranch = cur.branch !== null;
+        if (!wasOnBranch) {
+          cur.branch = branch;
+          cur.x = curPoint.x;
+        }
+        curVertex = cur;
+        curParent = curVertex.nextParent < curVertex.parents.length ? curVertex.parents[curVertex.nextParent] : null;
+        if (curParent === null || wasOnBranch) break;
+      } else if (curParent === null) {
+        // null parent (off-screen) — end branch
+        curVertex.nextParent++;
+        break;
+      }
+    }
+
+    branch.end = vertices.length - 1;
+    for (let i = vertices.length - 1; i >= startAt; i--) {
+      const c = vertices[i].connections;
+      let found = false;
+      for (let j = 0; j < c.length; j++) {
+        if (c[j] && c[j].branch === branch) { found = true; break; }
+      }
+      if (found) { branch.end = i; break; }
+    }
+
+    branches.push(branch);
+    availableColours[branch.colour] = branch.end;
+  }
+
+  // Run layout
+  let i = 0;
+  while (i < vertices.length) {
+    const v = vertices[i];
+    if ((v.nextParent < v.parents.length && v.parents[v.nextParent] !== null) || v.branch === null) {
+      determinePath(i);
+    } else {
+      i++;
+    }
+  }
+
+  return { vertices, branches };
 }
 
 export function gitRelativeTime(ts) {
@@ -265,96 +328,99 @@ export function renderSvgGitGraph(outputEl, commits, currentBranch) {
     return;
   }
 
-  const { lanes, maxLane, branchColors } = assignLanes(commits);
-  const svgWidth = GG.LEFT_PAD + (maxLane + 1) * GG.LANE_W + 8;
-  const totalHeight = commits.length * GG.ROW_H;
+  const layout = layoutGraph(commits);
+  const { vertices, branches } = layout;
+  const d = GG.GRID_Y * 0.8; // bezier control offset
 
-  const pathSegments = []; // { d, color, isMergeIn }
-  const nodes = [];        // { cx, cy, color, isMerge, isHead }
-  const hashIndex = new Map();
-  commits.forEach((c, i) => hashIndex.set(c.hash, i));
+  // Compute SVG dimensions
+  let maxNextX = 0;
+  for (const v of vertices) if (v.nextX > maxNextX) maxNextX = v.nextX;
+  const svgWidth = 2 * GG.OFFSET_X + Math.max(maxNextX - 1, 0) * GG.GRID_X;
+  const totalHeight = commits.length * GG.GRID_Y;
 
-  // Detect HEAD commit
-  let headHash = null;
-  for (const c of commits) {
-    if (c.refs && /HEAD/.test(c.refs)) { headHash = c.hash; break; }
-  }
+  // Build SVG paths per branch
+  const shadowPaths = [];
+  const colorPaths = [];
 
-  for (let i = 0; i < commits.length; i++) {
-    const commit = commits[i];
-    const lane = lanes.get(commit.hash);
-    const colorIdx = branchColors.get(lane) ?? 1;
-    const color = GG.COLORS[colorIdx];
-    const cx = GG.LEFT_PAD + lane * GG.LANE_W;
-    const cy = i * GG.ROW_H + GG.ROW_H / 2;
-    const isMerge = commit.parents.length > 1;
-    const isHead = commit.hash === headHash;
+  for (const branch of branches) {
+    const colour = GG.COLORS[branch.colour % GG.COLORS.length];
 
-    nodes.push({ cx, cy, color, isMerge, isHead, hash: commit.hash });
+    // Convert grid lines to pixel lines and simplify consecutive verticals
+    const pixelLines = [];
+    for (const line of branch.lines) {
+      const x1 = line.p1.x * GG.GRID_X + GG.OFFSET_X;
+      const y1 = line.p1.y * GG.GRID_Y + GG.OFFSET_Y;
+      const x2 = line.p2.x * GG.GRID_X + GG.OFFSET_X;
+      const y2 = line.p2.y * GG.GRID_Y + GG.OFFSET_Y;
+      pixelLines.push({ x1, y1, x2, y2 });
+    }
 
-    for (let pIdx = 0; pIdx < commit.parents.length; pIdx++) {
-      const parentHash = commit.parents[pIdx];
-      const pi = hashIndex.get(parentHash);
-      if (pi === undefined) continue;
-      const parentLane = lanes.get(parentHash);
-      if (parentLane === undefined) continue;
-      const parentColorIdx = branchColors.get(parentLane) ?? 1;
-      const px = GG.LEFT_PAD + parentLane * GG.LANE_W;
-      const py = pi * GG.ROW_H + GG.ROW_H / 2;
-
-      let d;
-      const isMergeIn = pIdx > 0; // secondary parent = merge-in line
-      const isBranchOff = pIdx === 0 && lane !== parentLane; // first parent but different lane
-
-      if (lane === parentLane) {
-        // Same lane: straight vertical
-        d = `M${cx} ${cy} L${px} ${py}`;
-      } else if (isBranchOff) {
-        // Branch-off: stay in parent lane first, then curve to child lane
-        // "locked to end" — vertical first from child, curve near parent
-        const curveD = GG.ROW_H * 0.8;
-        d = `M${cx} ${cy} C${cx} ${cy + curveD}, ${px} ${py - curveD}, ${px} ${py}`;
+    // Merge consecutive vertical segments
+    for (let i = 0; i < pixelLines.length - 1; ) {
+      const a = pixelLines[i], b = pixelLines[i + 1];
+      if (a.x1 === a.x2 && b.x1 === b.x2 && a.x2 === b.x1 && a.y2 === b.y1) {
+        a.y2 = b.y2;
+        pixelLines.splice(i + 1, 1);
       } else {
-        // Merge-in: start from child lane, curve toward parent lane
-        // "locked to start" — curve near child, vertical into parent
-        const curveD = GG.ROW_H * 0.8;
-        d = `M${cx} ${cy} C${px} ${cy + curveD}, ${px} ${py - curveD}, ${px} ${py}`;
+        i++;
       }
+    }
 
-      // Merge-in lines use the incoming branch color; branch-off uses parent color
-      const lineColor = isMergeIn ? color : GG.COLORS[parentColorIdx];
-      pathSegments.push({ d, color: lineColor });
+    // Build SVG path string
+    let pathD = '';
+    for (let i = 0; i < pixelLines.length; i++) {
+      const l = pixelLines[i];
+      // Move to start if first segment or discontinuity
+      if (i === 0 || l.x1 !== pixelLines[i - 1].x2 || l.y1 !== pixelLines[i - 1].y2) {
+        pathD += `M${l.x1},${l.y1.toFixed(1)}`;
+      }
+      if (l.x1 === l.x2) {
+        // Vertical
+        pathD += `L${l.x2},${l.y2.toFixed(1)}`;
+      } else {
+        // Bezier S-curve: C x1,(y1+d) x2,(y2-d) x2,y2
+        pathD += `C${l.x1},${(l.y1 + d).toFixed(1)} ${l.x2},${(l.y2 - d).toFixed(1)} ${l.x2},${l.y2.toFixed(1)}`;
+      }
+    }
+
+    if (pathD) {
+      shadowPaths.push(pathD);
+      colorPaths.push({ d: pathD, colour });
     }
   }
 
-  // Render SVG: shadow paths first (wider, dark), then colored paths, then nodes on top
-  const bgColor = '#0a0f1a'; // approximate dark canvas background for shadow
-  const svgShadows = pathSegments.map(p =>
-    `<path d="${p.d}" stroke="${bgColor}" stroke-width="${GG.SHADOW_W}" fill="none" stroke-linecap="round"/>`
-  ).join('');
-  const svgPaths = pathSegments.map(p =>
-    `<path d="${p.d}" stroke="${p.color}" stroke-width="${GG.LINE_W}" fill="none" stroke-opacity="0.85" stroke-linecap="round"/>`
-  ).join('');
+  // Render SVG layers: shadows, then colored lines, then nodes
+  const bgColor = '#0a0f1a';
+  let svgContent = '';
 
-  const svgNodes = nodes.map(n => {
-    if (n.isHead) {
-      // HEAD: open circle with thicker stroke (like mhutchie's "current" style)
-      return `<circle cx="${n.cx}" cy="${n.cy}" r="${GG.NODE_R + 1}" fill="none" stroke="${n.color}" stroke-width="2.5"/>` +
-             `<circle cx="${n.cx}" cy="${n.cy}" r="2" fill="${n.color}"/>`;
-    }
-    if (n.isMerge) {
-      // Merge: double filled circle (outer + inner, like VS Code's built-in)
-      return `<circle cx="${n.cx}" cy="${n.cy}" r="${GG.MERGE_R_OUTER}" fill="${n.color}" stroke="rgba(0,0,0,0.3)" stroke-width="0.5"/>` +
-             `<circle cx="${n.cx}" cy="${n.cy}" r="${GG.MERGE_R_INNER}" fill="#0d1117"/>`;
-    }
-    // Regular commit: solid filled circle
-    return `<circle cx="${n.cx}" cy="${n.cy}" r="${GG.NODE_R}" fill="${n.color}" stroke="rgba(0,0,0,0.3)" stroke-width="0.5"/>`;
-  }).join('');
+  // Shadows
+  for (const sp of shadowPaths) {
+    svgContent += `<path d="${sp}" stroke="${bgColor}" stroke-width="${GG.SHADOW_W}" fill="none" stroke-linecap="round" stroke-opacity="0.75"/>`;
+  }
+  // Colored lines
+  for (const cp of colorPaths) {
+    svgContent += `<path d="${cp.d}" stroke="${cp.colour}" stroke-width="${GG.LINE_W}" fill="none" stroke-linecap="round"/>`;
+  }
+  // Nodes
+  for (const v of vertices) {
+    if (v.x < 0) continue;
+    const cx = v.x * GG.GRID_X + GG.OFFSET_X;
+    const cy = v.id * GG.GRID_Y + GG.OFFSET_Y;
+    const colour = v.branch ? GG.COLORS[v.branch.colour % GG.COLORS.length] : '#808080';
 
+    if (v.isCurrent) {
+      // HEAD: open circle (background fill, colored stroke)
+      svgContent += `<circle cx="${cx}" cy="${cy}" r="${GG.NODE_R}" fill="#0d1117" stroke="${colour}" stroke-width="2"/>`;
+    } else {
+      // Normal: filled circle, thin background stroke
+      svgContent += `<circle cx="${cx}" cy="${cy}" r="${GG.NODE_R}" fill="${colour}" stroke="#0d1117" stroke-width="1" stroke-opacity="0.75"/>`;
+    }
+  }
+
+  // Build row HTML
   const rowsHtml = commits.map((commit, i) => {
-    const lane = lanes.get(commit.hash);
-    const colorIdx = branchColors.get(lane) ?? 1;
-    const color = GG.COLORS[colorIdx];
+    const v = vertices[i];
+    const colour = v.branch ? GG.COLORS[v.branch.colour % GG.COLORS.length] : '#808080';
     const timeStr = commit.timestamp ? gitRelativeTime(commit.timestamp) : '';
 
     let refsHtml = '';
@@ -373,10 +439,10 @@ export function renderSvgGitGraph(outputEl, commits, currentBranch) {
       }
     }
 
-    return `<div class="gg-row" data-hash="${commit.hash}" style="height:${GG.ROW_H}px">
+    return `<div class="gg-row" data-hash="${commit.hash}" style="height:${GG.GRID_Y}px">
       <div class="gg-graph-spacer" style="width:${svgWidth}px"></div>
       <div class="gg-info">
-        <span class="gg-hash" style="color:${color}">${commit.hash}</span>
+        <span class="gg-hash" style="color:${colour}">${commit.hash}</span>
         <span class="gg-time">${timeStr}</span>
         ${refsHtml}
         <span class="gg-subject">${escapeHtml(commit.subject || '')}</span>
@@ -389,9 +455,7 @@ export function renderSvgGitGraph(outputEl, commits, currentBranch) {
     <div class="gg-scroll-container">
       <svg class="gg-svg" width="${svgWidth}" height="${totalHeight}"
            viewBox="0 0 ${svgWidth} ${totalHeight}" xmlns="http://www.w3.org/2000/svg">
-        ${svgShadows}
-        ${svgPaths}
-        ${svgNodes}
+        ${svgContent}
       </svg>
       <div class="gg-rows">${rowsHtml}</div>
     </div>`;
