@@ -20,14 +20,14 @@
 
 <img width="100%" alt="After — 49Agents" src="https://github.com/user-attachments/assets/878b3926-e017-4ccc-9c54-315b647fd417" />
 <h1 align="center">
-  After
+  49
 </h1>
 <img width="100%" alt="Before — terminal clutter" src="https://github.com/user-attachments/assets/b06c8fe8-d1bf-432a-b935-bbf8376bd7ff" />
 
 
 ---
 
-| Before | With 49Agents |
+| Before | 49 |
 |--------|--------------|
 | 14 terminal tabs | One zoomable canvas |
 | SSH into each machine | All machines, zero SSH |
