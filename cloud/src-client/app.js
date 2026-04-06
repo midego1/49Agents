@@ -4904,6 +4904,8 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
         if (fpInfo?.refreshInterval) clearInterval(fpInfo.refreshInterval);
         folderPanes.delete(paneId);
         agentRequest('DELETE', `/api/folder-panes/${paneId}`, null, pane?.agentId).catch(() => {});
+      } else if (paneType === 'conversations') {
+        agentRequest('DELETE', `/api/conversations-panes/${paneId}`, null, pane?.agentId).catch(() => {});
       }
 
       // Remove from state
