@@ -37,12 +37,15 @@ Contribution with the Project.
 
 ## 4. Right to Relicense
 
-You acknowledge that the Organization may license the Project, including
-your Contributions, under any license terms, including proprietary or
-commercial licenses. This right is necessary because the Project is
-distributed under the Business Source License 1.1 (BSL 1.1), which requires
-the licensor to maintain full relicensing authority. This right transfers
-to any successor organization or entity that acquires the Project.
+You hereby grant the Organization the irrevocable right to relicense your
+Contributions under any license terms, including proprietary, commercial,
+or more restrictive terms, without further notice to or consent from You.
+This right is necessary because the Project may be distributed under
+licenses that require the licensor to maintain full relicensing authority,
+including the Business Source License 1.1 (BSL 1.1). This right is freely
+assignable and transfers to any successor organization or entity that
+acquires the Project, whether by merger, acquisition, asset sale, or
+otherwise.
 
 ## 5. Representations
 
@@ -70,7 +73,11 @@ merchantability, fitness for a particular purpose, and non-infringement.
 
 ## 7. Agreement
 
-By submitting a pull request to this repository, you signify your agreement
-to these terms. You may indicate your agreement by adding your name and
-email to the list below, or by checking the CLA agreement box in your pull
-request.
+You signify your agreement to these terms by commenting on a pull request
+with the following statement:
+
+"I have read the CLA Document and I hereby sign the CLA"
+
+Your agreement is recorded with your GitHub username and a timestamp in the
+project's CLA signature file. This constitutes your electronic signature
+and acceptance of all terms in this Agreement.

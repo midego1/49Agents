@@ -10,12 +10,17 @@ Before your contribution can be accepted, you must agree to our
 is licensed under BSL 1.1, and we need to maintain the ability to offer
 commercial licenses.
 
+**By signing the CLA, you grant the 49Agents organization the right to
+relicense your contributions under any terms, including proprietary or
+commercial licenses.** Please read the full [CLA](CLA.md) before
+contributing.
+
 When you open a pull request for the first time, you will be asked to sign
-the CLA. This is a one-time requirement.
+the CLA by commenting on the PR. This is a one-time requirement.
 
 ## How to Contribute
 
-1. **Fork the repository** and create your branch from `master`.
+1. **Fork the repository** and create your branch from `main`.
 2. **Make your changes** with clear, descriptive commits.
 3. **Test your changes** thoroughly before submitting.
 4. **Open a pull request** with a clear description of what your changes do.
