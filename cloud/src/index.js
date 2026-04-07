@@ -169,11 +169,12 @@ setupPreferencesRoutes(app);
 setupAnalyticsRoutes(app);
 
 // ---------------------------------------------------------------------------
-// Main app entry point (skip auth in dev mode)
+// Main app entry point (auth required in both cloud and local modes)
+// SKIP_CLOUD_AUTH env var bypasses auth for contributors in local dev
 // ---------------------------------------------------------------------------
 const hasOAuth = config.github.clientId || config.google.clientId;
 const devModeEnabled = !hasOAuth && config.nodeEnv !== 'production';
-if (devModeEnabled) {
+if (devModeEnabled && process.env.SKIP_CLOUD_AUTH) {
   app.get('/', (req, res) => res.sendFile('index.html', { root: publicDir }));
 } else {
   app.get('/', requireAuth, (req, res) => res.sendFile('index.html', { root: publicDir }));

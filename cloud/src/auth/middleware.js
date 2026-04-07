@@ -2,6 +2,7 @@ import { jwtVerify } from 'jose';
 import { issueAccessToken, getSecretKey } from './github.js';
 import { getUserById } from '../db/users.js';
 import { upsertUser } from '../db/users.js';
+import { getLocalAuth } from './localAuth.js';
 import { config } from '../config.js';
 
 const hasOAuth = !!(config.github.clientId || config.google.clientId);
@@ -30,16 +31,35 @@ export function requireAuth(req, res, next) {
 }
 
 async function handleAuth(req, res, next) {
-  // Dev/local mode: no OAuth configured AND not production — auto-authenticate as dev user
+  // Dev/local mode: no OAuth configured AND not production
   if (devModeEnabled) {
-    const devUser = upsertUser({
-      githubId: 'dev-0',
-      githubLogin: 'dev-user',
-      email: 'dev@localhost',
-      displayName: 'Dev User',
-      avatarUrl: null,
+    // Escape hatch for contributors running without internet
+    if (process.env.SKIP_CLOUD_AUTH) {
+      const devUser = upsertUser({
+        githubId: 'dev-0',
+        githubLogin: 'dev-user',
+        email: 'dev@localhost',
+        displayName: 'Dev User',
+        avatarUrl: null,
+      });
+      req.user = devUser;
+      return next();
+    }
+
+    // Local mode: require cloud authentication
+    const localAuth = getLocalAuth();
+    if (!localAuth) {
+      return sendUnauthorized(req, res);
+    }
+
+    // Use the cloud-authenticated identity
+    const user = getUserById(localAuth.cloudUserId) || upsertUser({
+      githubLogin: localAuth.githubLogin,
+      email: localAuth.email,
+      displayName: localAuth.displayName || 'Local User',
+      avatarUrl: localAuth.avatarUrl,
     });
-    req.user = devUser;
+    req.user = user;
     return next();
   }
 
