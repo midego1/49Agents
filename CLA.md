@@ -2,7 +2,8 @@
 
 Thank you for your interest in contributing to 49Agents. This Contributor
 License Agreement ("Agreement") documents the rights granted by contributors
-to 49Agents ("the Project").
+to the 49Agents organization ("the Organization") for the 49Agents project
+("the Project").
 
 By submitting a pull request or otherwise contributing to this repository,
 you agree to the following terms:
@@ -14,31 +15,34 @@ or additions to existing work, that you submit to this Project.
 
 "You" means the individual or legal entity making the Contribution.
 
+"Organization" means the 49Agents organization, its successors, and assigns.
+
 ## 2. Grant of Copyright License
 
-You hereby grant to 49Agents and recipients of software distributed by
-49Agents a perpetual, worldwide, non-exclusive, no-charge, royalty-free,
-irrevocable copyright license to reproduce, prepare derivative works of,
-publicly display, publicly perform, sublicense, and distribute your
-Contributions and derivative works thereof.
+You hereby grant to the Organization and recipients of software distributed
+by the Organization a perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, irrevocable copyright license to reproduce, prepare derivative
+works of, publicly display, publicly perform, sublicense, and distribute
+your Contributions and derivative works thereof.
 
 ## 3. Grant of Patent License
 
-You hereby grant to 49Agents and recipients of software distributed by
-49Agents a perpetual, worldwide, non-exclusive, no-charge, royalty-free,
-irrevocable patent license to make, have made, use, offer to sell, sell,
-import, and otherwise transfer your Contributions, where such license
-applies only to those patent claims licensable by you that are necessarily
-infringed by your Contribution alone or by combination of your Contribution
-with the Project.
+You hereby grant to the Organization and recipients of software distributed
+by the Organization a perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, irrevocable patent license to make, have made, use, offer to
+sell, sell, import, and otherwise transfer your Contributions, where such
+license applies only to those patent claims licensable by you that are
+necessarily infringed by your Contribution alone or by combination of your
+Contribution with the Project.
 
 ## 4. Right to Relicense
 
-You acknowledge that 49Agents may license the Project, including your
-Contributions, under any license terms, including proprietary or commercial
-licenses. This right is necessary because the Project is distributed under
-the Business Source License 1.1 (BSL 1.1), which requires the licensor to
-maintain full relicensing authority.
+You acknowledge that the Organization may license the Project, including
+your Contributions, under any license terms, including proprietary or
+commercial licenses. This right is necessary because the Project is
+distributed under the Business Source License 1.1 (BSL 1.1), which requires
+the licensor to maintain full relicensing authority. This right transfers
+to any successor organization or entity that acquires the Project.
 
 ## 5. Representations
 
