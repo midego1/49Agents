@@ -17,6 +17,9 @@ import { setupDownloadRoutes } from './routes/download.js';
 import { setupPreferencesRoutes } from './routes/preferences.js';
 import { setupAnalyticsRoutes } from './routes/analytics.js';
 import { setupWebSocketRelay } from './ws/relay.js';
+import { setupCloudCallbackRoutes } from './auth/cloudCallback.js';
+import { ensureLocalAuthTable, isLocalMode } from './auth/localAuth.js';
+import { initLocalTelemetryCollector } from './telemetry/localCollector.js';
 import { config } from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -124,12 +127,26 @@ setupDownloadRoutes(app);
 // ---------------------------------------------------------------------------
 setupGitHubAuth(app);
 setupGoogleAuth(app);
+setupCloudCallbackRoutes(app);
+
+// Auth mode endpoint (public — tells the login page if we're local or cloud)
+app.get('/api/auth/mode', (req, res) => {
+  res.json({
+    mode: isLocalMode() ? 'local' : 'cloud',
+    cloudAuthUrl: isLocalMode() ? config.cloudAuthUrl : undefined,
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Login page (public)
 // ---------------------------------------------------------------------------
 app.get('/login', (req, res) => {
   res.sendFile('login.html', { root: publicDir });
+});
+
+// Telemetry consent page (local mode only, shown after first cloud auth)
+app.get('/consent', (req, res) => {
+  res.sendFile('consent.html', { root: publicDir });
 });
 
 // ---------------------------------------------------------------------------
@@ -153,11 +170,12 @@ setupPreferencesRoutes(app);
 setupAnalyticsRoutes(app);
 
 // ---------------------------------------------------------------------------
-// Main app entry point (skip auth in dev mode)
+// Main app entry point (auth required in both cloud and local modes)
+// SKIP_CLOUD_AUTH env var bypasses auth for contributors in local dev
 // ---------------------------------------------------------------------------
 const hasOAuth = config.github.clientId || config.google.clientId;
 const devModeEnabled = !hasOAuth && config.nodeEnv !== 'production';
-if (devModeEnabled) {
+if (devModeEnabled && process.env.SKIP_CLOUD_AUTH) {
   app.get('/', (req, res) => res.sendFile('index.html', { root: publicDir }));
 } else {
   app.get('/', requireAuth, (req, res) => res.sendFile('index.html', { root: publicDir }));
@@ -197,6 +215,8 @@ app.get('*', (req, res) => {
 // ---------------------------------------------------------------------------
 async function start() {
   initDatabase();
+  ensureLocalAuthTable();
+  initLocalTelemetryCollector();
 
   // Read latest agent version from the tarball
   let latestAgentVersion = null;
