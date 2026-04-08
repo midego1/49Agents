@@ -170,6 +170,46 @@ setupPreferencesRoutes(app);
 setupAnalyticsRoutes(app);
 
 // ---------------------------------------------------------------------------
+// Feedback proxy (local mode only — forwards /api/messages to cloud server)
+// ---------------------------------------------------------------------------
+if (isLocalMode()) {
+  const { getLocalAuth } = await import('./auth/localAuth.js');
+
+  async function proxyToCloud(req, res) {
+    const localAuth = getLocalAuth();
+    if (!localAuth || !localAuth.cloudToken) {
+      return res.status(401).json({ error: 'Not authenticated with cloud' });
+    }
+    const cloudUrl = config.cloudAuthUrl;
+    const url = `${cloudUrl}${req.originalUrl}`;
+    const opts = {
+      method: req.method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localAuth.cloudToken}`,
+      },
+      signal: AbortSignal.timeout(10000),
+    };
+    if (req.method !== 'GET' && req.body) {
+      opts.body = JSON.stringify(req.body);
+    }
+    try {
+      const resp = await fetch(url, opts);
+      const data = await resp.json();
+      res.status(resp.status).json(data);
+    } catch (err) {
+      console.error('[feedback-proxy] Error:', err.message);
+      res.status(502).json({ error: 'Cloud server unreachable' });
+    }
+  }
+
+  app.get('/api/messages', proxyToCloud);
+  app.post('/api/messages', proxyToCloud);
+  app.get('/api/messages/unread-count', proxyToCloud);
+  app.post('/api/messages/mark-read', proxyToCloud);
+}
+
+// ---------------------------------------------------------------------------
 // Main app entry point (auth required in both cloud and local modes)
 // SKIP_CLOUD_AUTH env var bypasses auth for contributors in local dev
 // ---------------------------------------------------------------------------

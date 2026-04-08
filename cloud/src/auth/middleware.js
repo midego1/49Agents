@@ -62,6 +62,25 @@ async function handleAuth(req, res, next) {
     // Fall through to JWT cookie check below (guest mode, etc.)
   }
 
+  // Check for Bearer token (local instance tokens proxying requests to cloud)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.slice(7);
+      const secretKey = getSecretKey();
+      const { payload } = await jwtVerify(token, secretKey);
+      if (payload.type === 'local_instance' && payload.sub) {
+        const user = getUserById(payload.sub);
+        if (user) {
+          req.user = user;
+          return next();
+        }
+      }
+    } catch {
+      // Bearer token invalid — fall through to cookie check
+    }
+  }
+
   const accessToken = req.cookies?.tc_access;
   const refreshToken = req.cookies?.tc_refresh;
   const secretKey = getSecretKey();
