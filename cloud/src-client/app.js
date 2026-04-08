@@ -10107,7 +10107,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
       const label = document.createElement('button');
       label.className = 'project-rect-label';
       label.style.color = `rgba(${project.color}, 0.8)`;
-      const shortcutHint = project.shortcutNumber ? ` [${project.shortcutNumber}]` : '';
+      const shortcutHint = ` [${project.shortcutNumber || '?'}]`;
       label.textContent = project.name + shortcutHint;
       rect.appendChild(label);
 
@@ -10393,7 +10393,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
         <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" fill="currentColor"/></svg>
       </div>
       <div class="checkpoint-pane-name">${escapeHtml(paneData.paneName || paneData.checkpointName || 'Checkpoint')}</div>
-      ${paneData.shortcutNumber ? `<div class="checkpoint-pane-badge">Tab+${paneData.shortcutNumber}</div>` : ''}
+      <div class="checkpoint-pane-badge">${paneData.shortcutNumber ? `Tab+${paneData.shortcutNumber}` : 'Tab+?'}</div>
       <button class="checkpoint-pane-close" aria-label="Close"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     `;
 
@@ -10679,7 +10679,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
       for (let i = 0; i < state.projects.length; i++) {
         const project = state.projects[i];
         const counts = getProjectPaneCounts(project);
-        const numberBadge = project.shortcutNumber ? `<span class="ps-number-badge">Tab+${project.shortcutNumber}</span>` : '';
+        const numberBadge = `<span class="ps-number-badge">${project.shortcutNumber ? `Tab+${project.shortcutNumber}` : 'Tab+?'}</span>`;
 
         // Build detailed stats line
         const stats = [];
@@ -10706,7 +10706,7 @@ import { initGitGraphDeps, renderGitGraphPane, fetchGitGraphData } from './modul
     if (checkpointPanes.length > 0) {
       html += '<div class="ps-section-label">Checkpoints</div>';
       for (const ckpt of checkpointPanes) {
-        const ckptBadge = ckpt.shortcutNumber ? `<span class="ps-number-badge">Tab+${ckpt.shortcutNumber}</span>` : '';
+        const ckptBadge = `<span class="ps-number-badge">${ckpt.shortcutNumber ? `Tab+${ckpt.shortcutNumber}` : 'Tab+?'}</span>`;
         html += `<div class="ps-item ps-checkpoint" data-pane-id="${ckpt.id}">
           <div class="ps-checkpoint-icon">
             <svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" fill="currentColor"/></svg>
