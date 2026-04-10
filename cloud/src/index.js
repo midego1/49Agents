@@ -20,6 +20,7 @@ import { setupWebSocketRelay } from './ws/relay.js';
 import { setupNotificationRoutes } from './routes/notifications.js';
 import { setupCloudCallbackRoutes } from './auth/cloudCallback.js';
 import { ensureLocalAuthTable, isLocalMode } from './auth/localAuth.js';
+import { ensureEmailAuthTable, setupEmailAuthRoutes, getEmailAuth, issueEmailInstanceToken } from './auth/emailAuth.js';
 import { initLocalTelemetryCollector } from './telemetry/localCollector.js';
 import { config } from './config.js';
 
@@ -129,6 +130,9 @@ setupDownloadRoutes(app);
 setupGitHubAuth(app);
 setupGoogleAuth(app);
 setupCloudCallbackRoutes(app);
+if (isLocalMode()) {
+  setupEmailAuthRoutes(app);
+}
 
 // Auth mode endpoint (public — tells the login page if we're local or cloud)
 app.get('/api/auth/mode', (req, res) => {
@@ -176,9 +180,18 @@ setupAnalyticsRoutes(app);
 if (isLocalMode()) {
   const { getLocalAuth } = await import('./auth/localAuth.js');
 
-  async function proxyToCloud(req, res) {
+  async function getBearerToken() {
+    // Prefer OAuth cloud token; fall back to email instance token
     const localAuth = getLocalAuth();
-    if (!localAuth || !localAuth.cloudToken) {
+    if (localAuth && localAuth.cloudToken) return localAuth.cloudToken;
+    const emailAuth = getEmailAuth();
+    if (emailAuth) return issueEmailInstanceToken(emailAuth.instanceId, emailAuth.email);
+    return null;
+  }
+
+  async function proxyToCloud(req, res) {
+    const token = await getBearerToken();
+    if (!token) {
       return res.status(401).json({ error: 'Not authenticated with cloud' });
     }
     const cloudUrl = config.cloudAuthUrl;
@@ -187,7 +200,7 @@ if (isLocalMode()) {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localAuth.cloudToken}`,
+        'Authorization': `Bearer ${token}`,
       },
       signal: AbortSignal.timeout(10000),
     };
@@ -250,6 +263,7 @@ app.get('/pair', requireAuth, (req, res) => {
 async function start() {
   initDatabase();
   ensureLocalAuthTable();
+  ensureEmailAuthTable();
   initLocalTelemetryCollector();
 
   // Read latest agent version from the tarball
