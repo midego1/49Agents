@@ -13,11 +13,13 @@
   "build": {
     "appId": "com.49agents.desktop",
     "productName": "49Agents",
+    "icon": "assets/icon.icns",
     "directories": {
       "output": "dist"
     },
     "files": [
       "src/**/*",
+      "assets/**/*",
       "!node_modules"
     ],
     "extraResources": [

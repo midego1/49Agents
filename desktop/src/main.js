@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, dialog, shell, ipcMain } from 'electron';
 import { spawn } from 'child_process';
 import { createServer } from 'net';
 import { request } from 'http';
@@ -8,33 +8,61 @@ import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// When packaged, cloud/agent live in process.resourcesPath/cloud|agent.
-// In dev (electron . from desktop/), they are siblings of desktop/.
 const isDev = !app.isPackaged;
 const repoRoot = isDev ? join(__dirname, '..', '..') : process.resourcesPath;
 const cloudDir = join(repoRoot, 'cloud');
 const agentDir = join(repoRoot, 'agent');
 
+let tray = null;
+let dashboardWindow = null;
 let mainWindow = null;
 let cloudProcess = null;
 let agentProcess = null;
 let appPort = null;
 
-// ── Dependency check ─────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
+
+const state = {
+  cloud: 'stopped',  // 'stopped' | 'starting' | 'running' | 'error'
+  agent: 'stopped',
+  port: null,
+  cloudLogs: [],
+  agentLogs: [],
+};
+
+function pushLog(service, text) {
+  const lines = text.trimEnd().split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const entry = { t: Date.now(), line };
+    state[`${service}Logs`].push(entry);
+    if (state[`${service}Logs`].length > 500) state[`${service}Logs`].shift();
+    dashboardWindow?.webContents.send('log', { service, ...entry });
+  }
+}
+
+function setState(patch) {
+  Object.assign(state, patch);
+  dashboardWindow?.webContents.send('state', getPublicState());
+  updateTray();
+}
+
+function getPublicState() {
+  return { cloud: state.cloud, agent: state.agent, port: state.port };
+}
+
+// ── Dependency check ──────────────────────────────────────────────────────────
 
 function checkDependencies() {
   const missing = [];
   for (const bin of ['tmux', 'ttyd']) {
-    try {
-      execSync(`which ${bin}`, { stdio: 'ignore' });
-    } catch {
-      missing.push(bin);
-    }
+    try { execSync(`which ${bin}`, { stdio: 'ignore' }); }
+    catch { missing.push(bin); }
   }
   return missing;
 }
 
-// ── Free port finder ─────────────────────────────────────────────────────────
+// ── Port finder ───────────────────────────────────────────────────────────────
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -47,21 +75,16 @@ function findFreePort() {
   });
 }
 
-// ── Process management ────────────────────────────────────────────────────────
+// ── HTTP poll ─────────────────────────────────────────────────────────────────
 
 function waitForServer(port, timeout = 20000) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeout;
     const probe = () => {
-      const req = request({ host: '127.0.0.1', port, path: '/', method: 'GET' }, () => {
-        resolve();
-      });
+      const req = request({ host: '127.0.0.1', port, path: '/', method: 'GET' }, () => resolve());
       req.on('error', () => {
-        if (Date.now() >= deadline) {
-          reject(new Error(`Server on port ${port} did not respond within ${timeout}ms`));
-        } else {
-          setTimeout(probe, 300);
-        }
+        if (Date.now() >= deadline) reject(new Error(`Server did not respond within ${timeout}ms`));
+        else setTimeout(probe, 300);
       });
       req.end();
     };
@@ -69,97 +92,224 @@ function waitForServer(port, timeout = 20000) {
   });
 }
 
-function spawnCloud(port) {
-  return new Promise((resolve, reject) => {
-    const userData = app.getPath('userData');
-    const env = {
-      ...process.env,
-      PORT: String(port),
-      NODE_ENV: 'development',
-      // Write DB to userData so it's never inside the read-only app bundle.
-      DATABASE_PATH: join(userData, 'tc.db'),
-    };
+// ── Process management ────────────────────────────────────────────────────────
 
-    cloudProcess = spawn('node', ['src/index.js'], {
-      cwd: cloudDir,
-      env,
-      stdio: 'ignore',
-    });
+async function startCloud(port) {
+  if (cloudProcess) return;
+  setState({ cloud: 'starting' });
 
-    cloudProcess.on('error', reject);
-    cloudProcess.on('exit', (code) => {
-      reject(new Error(`Cloud process exited with code ${code}`));
-    });
-
-    waitForServer(port).then(resolve).catch(reject);
-  });
-}
-
-function spawnAgent(port) {
+  const userData = app.getPath('userData');
   const env = {
     ...process.env,
-    TC_CLOUD_URL: `ws://127.0.0.1:${port}`,
+    PORT: String(port),
+    NODE_ENV: 'development',
+    DATABASE_PATH: join(userData, 'tc.db'),
   };
 
+  cloudProcess = spawn('node', ['src/index.js'], {
+    cwd: cloudDir,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  cloudProcess.stdout.on('data', (d) => pushLog('cloud', d.toString()));
+  cloudProcess.stderr.on('data', (d) => pushLog('cloud', d.toString()));
+  cloudProcess.on('error', (err) => {
+    pushLog('cloud', `[error] ${err.message}`);
+    setState({ cloud: 'error' });
+    cloudProcess = null;
+  });
+  cloudProcess.on('exit', (code) => {
+    pushLog('cloud', `[exited with code ${code}]`);
+    setState({ cloud: 'stopped' });
+    cloudProcess = null;
+  });
+
+  try {
+    await waitForServer(port);
+    setState({ cloud: 'running', port });
+  } catch (err) {
+    setState({ cloud: 'error' });
+    throw err;
+  }
+}
+
+function startAgent(port) {
+  if (agentProcess) return;
+  setState({ agent: 'starting' });
+
+  const env = { ...process.env, TC_CLOUD_URL: `ws://127.0.0.1:${port}` };
   agentProcess = spawn('node', ['bin/49-agent.js', 'start'], {
     cwd: agentDir,
     env,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  agentProcess.stdout.on('data', (d) => pushLog('agent', d.toString()));
+  agentProcess.stderr.on('data', (d) => pushLog('agent', d.toString()));
   agentProcess.on('error', (err) => {
-    console.error('Agent process error:', err);
+    pushLog('agent', `[error] ${err.message}`);
+    setState({ agent: 'error' });
+    agentProcess = null;
   });
+  agentProcess.on('exit', (code) => {
+    pushLog('agent', `[exited with code ${code}]`);
+    setState({ agent: 'stopped' });
+    agentProcess = null;
+  });
+
+  setState({ agent: 'running' });
+}
+
+function stopCloud() {
+  if (cloudProcess) { cloudProcess.kill(); cloudProcess = null; }
+  setState({ cloud: 'stopped' });
+}
+
+function stopAgent() {
+  if (agentProcess) { agentProcess.kill(); agentProcess = null; }
+  setState({ agent: 'stopped' });
+}
+
+async function restartAll() {
+  stopAgent();
+  stopCloud();
+  await new Promise(r => setTimeout(r, 600));
+  await startCloud(appPort);
+  startAgent(appPort);
 }
 
 function killAll() {
-  if (cloudProcess) {
-    cloudProcess.kill();
-    cloudProcess = null;
-  }
-  if (agentProcess) {
-    agentProcess.kill();
-    agentProcess = null;
-  }
+  if (cloudProcess) { cloudProcess.kill(); cloudProcess = null; }
+  if (agentProcess) { agentProcess.kill(); agentProcess = null; }
 }
 
-// ── Window ────────────────────────────────────────────────────────────────────
+// ── Tray ──────────────────────────────────────────────────────────────────────
 
-function createWindow(port) {
+function makeTrayIcon(status) {
+  const color = status === 'running' ? '#4ade80' : status === 'starting' ? '#facc15' : '#f87171';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">
+    <circle cx="11" cy="11" r="5" fill="${color}"/>
+  </svg>`;
+  const img = nativeImage.createFromDataURL(
+    `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+  );
+  img.setTemplateImage(false);
+  return img;
+}
+
+function overallStatus() {
+  if (state.cloud === 'running' && state.agent === 'running') return 'running';
+  if (state.cloud === 'error' || state.agent === 'error') return 'error';
+  if (state.cloud === 'starting' || state.agent === 'starting') return 'starting';
+  return 'stopped';
+}
+
+function updateTray() {
+  if (!tray) return;
+  tray.setImage(makeTrayIcon(overallStatus()));
+
+  const isRunning = state.cloud === 'running';
+  const isBusy = state.cloud === 'starting' || state.agent === 'starting';
+
+  const menu = Menu.buildFromTemplate([
+    { label: '49Agents', enabled: false },
+    { label: `Cloud: ${state.cloud}  ·  Agent: ${state.agent}`, enabled: false },
+    { type: 'separator' },
+    { label: 'Open 49Agents', click: openMainWindow, enabled: isRunning },
+    { label: 'Dashboard', click: openDashboard },
+    { type: 'separator' },
+    { label: 'Restart', click: () => restartAll(), enabled: !isBusy },
+    { label: isRunning ? 'Stop' : 'Start', click: () => isRunning ? (stopAgent(), stopCloud()) : (startCloud(appPort).then(() => startAgent(appPort))), enabled: !isBusy },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() },
+  ]);
+  tray.setContextMenu(menu);
+}
+
+function createTray() {
+  tray = new Tray(makeTrayIcon('stopped'));
+  tray.setToolTip('49Agents');
+  tray.on('click', openDashboard);
+  updateTray();
+}
+
+// ── Dashboard window ──────────────────────────────────────────────────────────
+
+function openDashboard() {
+  if (dashboardWindow) { dashboardWindow.focus(); return; }
+
+  dashboardWindow = new BrowserWindow({
+    width: 500,
+    height: 620,
+    resizable: false,
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#050D18',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: join(__dirname, 'preload.js'),
+    },
+  });
+
+  dashboardWindow.loadFile(join(__dirname, 'dashboard.html'));
+  dashboardWindow.on('closed', () => { dashboardWindow = null; });
+
+  dashboardWindow.webContents.on('did-finish-load', () => {
+    dashboardWindow?.webContents.send('state', getPublicState());
+    for (const entry of state.cloudLogs.slice(-100))
+      dashboardWindow?.webContents.send('log', { service: 'cloud', ...entry });
+    for (const entry of state.agentLogs.slice(-100))
+      dashboardWindow?.webContents.send('log', { service: 'agent', ...entry });
+  });
+}
+
+// ── Main canvas window ────────────────────────────────────────────────────────
+
+function openMainWindow() {
+  if (mainWindow) { mainWindow.focus(); return; }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
     title: '49Agents',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  mainWindow.loadURL(`http://127.0.0.1:${appPort}`);
 
-  // If the load fails (e.g. server still warming up), retry after a short delay.
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode) => {
-    // -3 is ERR_ABORTED (user navigated away), don't retry that.
-    if (errorCode !== -3) {
-      setTimeout(() => mainWindow?.loadURL(`http://127.0.0.1:${port}`), 500);
-    }
+  mainWindow.webContents.on('did-fail-load', (_e, code) => {
+    if (code !== -3) setTimeout(() => mainWindow?.loadURL(`http://127.0.0.1:${appPort}`), 500);
   });
 
-  // Open external links in the system browser, not in the app window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
+// ── IPC ───────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('get-state', () => getPublicState());
+ipcMain.handle('get-logs', (_, service) =>
+  (service === 'cloud' ? state.cloudLogs : state.agentLogs).slice(-100)
+);
+ipcMain.handle('action', async (_, action) => {
+  switch (action) {
+    case 'open':    openMainWindow(); break;
+    case 'restart': await restartAll(); break;
+    case 'stop':    stopAgent(); stopCloud(); break;
+    case 'start':   await startCloud(appPort); startAgent(appPort); break;
+  }
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────────────
+
+app.dock.hide();
 
 app.whenReady().then(async () => {
   const missing = checkDependencies();
@@ -175,11 +325,13 @@ app.whenReady().then(async () => {
     return;
   }
 
+  createTray();
+
   try {
     appPort = await findFreePort();
-    await spawnCloud(appPort);
-    spawnAgent(appPort);
-    createWindow(appPort);
+    await startCloud(appPort);
+    startAgent(appPort);
+    openMainWindow();
   } catch (err) {
     await dialog.showMessageBox({
       type: 'error',
@@ -192,17 +344,7 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on('window-all-closed', () => {
-  // On macOS, quit when all windows are closed (don't keep running in dock).
-  app.quit();
-});
+// Keep running in tray when all windows are closed
+app.on('window-all-closed', () => {});
 
-app.on('will-quit', () => {
-  killAll();
-});
-
-app.on('activate', () => {
-  if (mainWindow === null && appPort) {
-    createWindow(appPort);
-  }
-});
+app.on('will-quit', killAll);
