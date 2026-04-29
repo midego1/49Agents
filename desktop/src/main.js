@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, shell } from 'electron';
 import { spawn } from 'child_process';
 import { createServer } from 'net';
+import { request } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execSync } from 'child_process';
@@ -48,6 +49,26 @@ function findFreePort() {
 
 // ── Process management ────────────────────────────────────────────────────────
 
+function waitForServer(port, timeout = 20000) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeout;
+    const probe = () => {
+      const req = request({ host: '127.0.0.1', port, path: '/', method: 'GET' }, () => {
+        resolve();
+      });
+      req.on('error', () => {
+        if (Date.now() >= deadline) {
+          reject(new Error(`Server on port ${port} did not respond within ${timeout}ms`));
+        } else {
+          setTimeout(probe, 300);
+        }
+      });
+      req.end();
+    };
+    probe();
+  });
+}
+
 function spawnCloud(port) {
   return new Promise((resolve, reject) => {
     const userData = app.getPath('userData');
@@ -55,43 +76,22 @@ function spawnCloud(port) {
       ...process.env,
       PORT: String(port),
       NODE_ENV: 'development',
-      // Write the DB to userData so it survives app updates and is never
-      // inside the read-only app bundle when packaged.
+      // Write DB to userData so it's never inside the read-only app bundle.
       DATABASE_PATH: join(userData, 'tc.db'),
     };
 
     cloudProcess = spawn('node', ['src/index.js'], {
       cwd: cloudDir,
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: 'ignore',
     });
 
-    let resolved = false;
-
-    const settle = (fn, val) => {
-      if (!resolved) {
-        resolved = true;
-        fn(val);
-      }
-    };
-
-    const onData = (data) => {
-      if (data.toString().includes('[cloud] Listening on')) {
-        settle(resolve, undefined);
-      }
-    };
-
-    cloudProcess.stdout.on('data', onData);
-    cloudProcess.stderr.on('data', onData);
-
-    cloudProcess.on('error', (err) => settle(reject, err));
-
+    cloudProcess.on('error', reject);
     cloudProcess.on('exit', (code) => {
-      settle(reject, new Error(`Cloud exited with code ${code} before becoming ready`));
+      reject(new Error(`Cloud process exited with code ${code}`));
     });
 
-    // Safety net: if the ready log never comes, resolve anyway after 6s.
-    setTimeout(() => settle(resolve, undefined), 6000);
+    waitForServer(port).then(resolve).catch(reject);
   });
 }
 
@@ -139,6 +139,14 @@ function createWindow(port) {
   });
 
   mainWindow.loadURL(`http://127.0.0.1:${port}`);
+
+  // If the load fails (e.g. server still warming up), retry after a short delay.
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode) => {
+    // -3 is ERR_ABORTED (user navigated away), don't retry that.
+    if (errorCode !== -3) {
+      setTimeout(() => mainWindow?.loadURL(`http://127.0.0.1:${port}`), 500);
+    }
+  });
 
   // Open external links in the system browser, not in the app window.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
