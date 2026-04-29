@@ -4,7 +4,8 @@ import { createServer } from 'net';
 import { request } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+import { appendFileSync, mkdirSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +17,29 @@ const agentDir = join(repoRoot, 'agent');
 // Augment PATH so child processes can find Homebrew binaries (tmux, ttyd, node).
 const EXTRA_PATHS = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
 process.env.PATH = [...new Set([...EXTRA_PATHS, ...(process.env.PATH || '').split(':')])].join(':');
+
+// Find the system node binary — packaged Electron doesn't expose node on PATH.
+function findNode() {
+  const candidates = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    'node',
+  ];
+  for (const c of candidates) {
+    try { execFileSync(c, ['--version'], { stdio: 'ignore' }); return c; }
+    catch { /* try next */ }
+  }
+  throw new Error('Could not find Node.js. Please install it from https://nodejs.org');
+}
+
+// Log to userData/app.log for debugging packaged builds.
+let logFile = null;
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args.join(' ')}\n`;
+  console.log(...args);
+  if (logFile) { try { appendFileSync(logFile, line); } catch {} }
+}
 
 let tray = null;
 let dashboardWindow = null;
@@ -113,6 +137,10 @@ async function startCloud(port) {
   setState({ cloud: 'starting' });
 
   const userData = app.getPath('userData');
+  const nodeBin = findNode();
+  log('Using node:', nodeBin);
+  log('cloudDir:', cloudDir);
+
   const env = {
     ...process.env,
     PORT: String(port),
@@ -120,20 +148,22 @@ async function startCloud(port) {
     DATABASE_PATH: join(userData, 'tc.db'),
   };
 
-  cloudProcess = spawn('node', ['src/index.js'], {
+  cloudProcess = spawn(nodeBin, ['src/index.js'], {
     cwd: cloudDir,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  cloudProcess.stdout.on('data', (d) => pushLog('cloud', d.toString()));
-  cloudProcess.stderr.on('data', (d) => pushLog('cloud', d.toString()));
+  cloudProcess.stdout.on('data', (d) => { log('[cloud]', d.toString().trimEnd()); pushLog('cloud', d.toString()); });
+  cloudProcess.stderr.on('data', (d) => { log('[cloud:err]', d.toString().trimEnd()); pushLog('cloud', d.toString()); });
   cloudProcess.on('error', (err) => {
+    log('[cloud] spawn error:', err.message);
     pushLog('cloud', `[error] ${err.message}`);
     setState({ cloud: 'error' });
     cloudProcess = null;
   });
   cloudProcess.on('exit', (code) => {
+    log('[cloud] exited with code', code);
     pushLog('cloud', `[exited with code ${code}]`);
     setState({ cloud: 'stopped' });
     cloudProcess = null;
@@ -152,8 +182,9 @@ function startAgent(port) {
   if (agentProcess) return;
   setState({ agent: 'starting' });
 
+  const nodeBin = findNode();
   const env = { ...process.env, TC_CLOUD_URL: `ws://127.0.0.1:${port}` };
-  agentProcess = spawn('node', ['bin/49-agent.js', 'start'], {
+  agentProcess = spawn(nodeBin, ['bin/49-agent.js', 'start'], {
     cwd: agentDir,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -326,6 +357,12 @@ ipcMain.handle('action', async (_, action) => {
 app.dock.hide();
 
 app.whenReady().then(async () => {
+  const userData = app.getPath('userData');
+  mkdirSync(userData, { recursive: true });
+  logFile = join(userData, 'app.log');
+  log('App starting, userData:', userData);
+  log('PATH:', process.env.PATH);
+
   const missing = checkDependencies();
   if (missing.length > 0) {
     await dialog.showMessageBox({
