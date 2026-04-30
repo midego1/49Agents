@@ -8,7 +8,8 @@
     "prestart": "cd ../cloud && npm install --silent && cd ../agent && npm install --silent",
     "start": "electron .",
     "build": "electron-builder --mac",
-    "build:dmg": "electron-builder --mac dmg"
+    "build:dmg": "electron-builder --mac dmg",
+    "release": "electron-builder --mac --publish always"
   },
   "build": {
     "appId": "com.49agents.desktop",
