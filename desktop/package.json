@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/main.js",
   "scripts": {
-    "prestart": "cd ../cloud && npm install --silent && cd ../agent && npm install --silent",
+    "prestart": "node scripts/prestart.js",
     "start": "electron .",
     "build": "electron-builder --mac",
     "build:dmg": "electron-builder --mac dmg",
