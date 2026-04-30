@@ -185,6 +185,7 @@ async function startCloud(port) {
     PORT: String(port),
     NODE_ENV: 'development',
     DATABASE_PATH: join(userData, 'tc.db'),
+    SKIP_CLOUD_AUTH: '1',
   };
 
   cloudProcess = spawn(nodeBin, ['src/index.js'], {
