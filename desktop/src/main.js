@@ -6,8 +6,66 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execSync, execFileSync } from 'child_process';
 import { appendFileSync, mkdirSync, cpSync, existsSync } from 'fs';
+import { autoUpdater } from 'electron-updater';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ── Auto-updater ──────────────────────────────────────────────────────────────
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
+
+autoUpdater.on('update-available', (info) => {
+  log('Update available:', info.version);
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Update Available',
+    message: `Version ${info.version} is available.`,
+    detail: 'Download and install now? The app will restart.',
+    buttons: ['Install Update', 'Later'],
+    defaultId: 0,
+  }).then(({ response }) => {
+    if (response === 0) autoUpdater.downloadUpdate();
+  });
+});
+
+autoUpdater.on('update-not-available', () => {
+  log('No update available');
+  if (_checkUpdateManual) {
+    _checkUpdateManual = false;
+    dialog.showMessageBox({ type: 'info', title: 'Up to Date', message: 'You are on the latest version.' });
+  }
+});
+
+autoUpdater.on('update-downloaded', () => {
+  log('Update downloaded');
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Ready to Install',
+    message: 'Update downloaded.',
+    detail: 'The app will restart to apply the update.',
+    buttons: ['Restart Now'],
+  }).then(() => {
+    killAll();
+    autoUpdater.quitAndInstall();
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  log('Updater error:', err.message);
+  if (_checkUpdateManual) {
+    _checkUpdateManual = false;
+    dialog.showMessageBox({ type: 'error', title: 'Update Check Failed', message: err.message });
+  }
+});
+
+let _checkUpdateManual = false;
+
+function checkForUpdates(manual = false) {
+  if (!app.isPackaged) return;
+  _checkUpdateManual = manual;
+  autoUpdater.checkForUpdates().catch((err) => log('checkForUpdates error:', err.message));
+}
 
 const isDev = !app.isPackaged;
 const repoRoot = isDev ? join(__dirname, '..', '..') : process.resourcesPath;
@@ -307,6 +365,7 @@ function updateTray() {
     { label: 'Restart', click: () => restartAll(), enabled: !isBusy },
     { label: isRunning ? 'Stop' : 'Start', click: () => isRunning ? (stopAgent(), stopCloud()) : (startCloud(appPort).then(() => startAgent(appPort))), enabled: !isBusy },
     { type: 'separator' },
+    { label: 'Check for Updates', click: () => checkForUpdates(true) },
     { label: 'Quit', click: () => app.quit() },
   ]);
   tray.setContextMenu(menu);
@@ -431,6 +490,7 @@ app.whenReady().then(async () => {
     await startCloud(appPort);
     startAgent(appPort);
     openMainWindow();
+    setTimeout(() => checkForUpdates(false), 10000);
   } catch (err) {
     await dialog.showMessageBox({
       type: 'error',

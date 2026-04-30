@@ -50,13 +50,24 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ]
     },
     "dmg": {
       "title": "49Agents"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "49Agents",
+      "repo": "49Agents"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "electron": "^36.0.0",
