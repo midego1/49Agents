@@ -7,7 +7,6 @@
   "scripts": {
     "prestart": "node scripts/prestart.js",
     "prebuild": "cd ../cloud && npm run build",
-    "prerelease": "cd ../cloud && npm run build",
     "start": "electron .",
     "build": "electron-builder --mac",
     "build:dmg": "electron-builder --mac dmg",
