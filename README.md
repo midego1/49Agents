@@ -61,6 +61,22 @@ Don't want to self-host? **[49agents.com](https://app.49agents.com)**
 
 ---
 
+## Desktop App (macOS)
+
+Download the latest `.dmg` from [GitHub Releases](https://github.com/49Agents/49Agents/releases/latest).
+
+After downloading, macOS will block the app because it is not notarized. Run this once to allow it:
+
+```bash
+xattr -cr /Applications/49Agents.app
+```
+
+Then open 49Agents normally. It runs as a tray icon — look for it in your menu bar.
+
+Updates are delivered in-app: click the tray icon and choose **Check for Updates**.
+
+---
+
 ## Features
 
 ### Canvas and Workspace
