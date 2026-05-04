@@ -5,7 +5,7 @@ import { request } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { execSync, execFileSync } from 'child_process';
-import { appendFileSync, mkdirSync, cpSync, existsSync, readFileSync } from 'fs';
+import { appendFileSync, mkdirSync, cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
@@ -133,15 +133,33 @@ function prepareServices(userData) {
     }
   }
 
-  log('rebuilding better-sqlite3 for current node ABI...');
-  try {
-    execFileSync(npmBin, ['rebuild', 'better-sqlite3', '--silent'], {
-      cwd: destCloud,
-      timeout: 60000,
-    });
-    log('better-sqlite3 ready');
-  } catch (err) {
-    log('better-sqlite3 rebuild failed:', err.message);
+  // Rebuild better-sqlite3 only when the node ABI version changes.
+  // Stamp file records the ABI we last compiled against so we don't rebuild
+  // on every launch, but always rebuild after a node upgrade.
+  const nodeAbi = process.versions.modules;
+  const abiStamp = join(destCloud, '.node-abi');
+  const lastAbi = existsSync(abiStamp) ? readFileSync(abiStamp, 'utf8').trim() : '';
+
+  if (lastAbi !== nodeAbi) {
+    log(`rebuilding better-sqlite3 (node ABI ${lastAbi || 'unknown'} -> ${nodeAbi})...`);
+    try {
+      // Delete existing binary so node-gyp always recompiles from source.
+      const nativeBin = join(destCloud, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
+      if (existsSync(nativeBin)) rmSync(nativeBin);
+
+      const nodeDir = dirname(dirname(nodeBin)); // e.g. /Users/foo/.nvm/versions/node/v22.x.x
+      execFileSync(npmBin, ['rebuild', 'better-sqlite3'], {
+        cwd: destCloud,
+        timeout: 120000,
+        env: { ...process.env, npm_config_nodedir: nodeDir },
+      });
+      writeFileSync(abiStamp, nodeAbi);
+      log('better-sqlite3 ready');
+    } catch (err) {
+      log('better-sqlite3 rebuild failed:', err.message);
+    }
+  } else {
+    log(`better-sqlite3 already built for ABI ${nodeAbi}`);
   }
 
   const tarball = join(destCloud, 'dl', '49-agent.tar.gz');
