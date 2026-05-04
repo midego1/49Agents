@@ -1,24 +1,28 @@
 {
   "name": "49agents-desktop",
-  "version": "0.1.0",
+  "version": "0.2.4",
   "description": "49Agents desktop app for macOS",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
-    "prestart": "cd ../cloud && npm install --silent && cd ../agent && npm install --silent",
+    "prestart": "node scripts/prestart.js",
+    "prebuild": "cd ../cloud && npm run build",
     "start": "electron .",
     "build": "electron-builder --mac",
-    "build:dmg": "electron-builder --mac dmg"
+    "build:dmg": "electron-builder --mac dmg",
+    "release": "electron-builder --mac --publish always"
   },
   "build": {
     "appId": "com.49agents.desktop",
     "productName": "49Agents",
+    "icon": "assets/icon.icns",
     "directories": {
       "output": "dist"
     },
     "files": [
       "src/**/*",
-      "!node_modules"
+      "assets/**/*",
+      "package.json"
     ],
     "extraResources": [
       {
@@ -27,7 +31,10 @@
         "filter": [
           "**/*",
           "!node_modules/.cache/**",
-          "!**/*.map"
+          "!node_modules/.package-lock.json",
+          "!**/*.map",
+          "!src-client/**",
+          "!data/**"
         ]
       },
       {
@@ -35,7 +42,8 @@
         "to": "agent",
         "filter": [
           "**/*",
-          "!node_modules/.cache/**"
+          "!node_modules/.cache/**",
+          "!node_modules/.package-lock.json"
         ]
       }
     ],
@@ -45,12 +53,24 @@
         {
           "target": "dmg",
           "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
         }
       ]
     },
     "dmg": {
       "title": "49Agents"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "49Agents",
+      "repo": "49Agents"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "electron": "^36.0.0",
