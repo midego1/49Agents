@@ -16,11 +16,43 @@ const activeTerminals = new Map();
 // Stores the in-flight promise so a second caller awaits the first instead of racing.
 const pendingAttaches = new Map();
 
-// Emit terminal output immediately for lowest latency.
+// Batch terminal output over a 10ms window before emitting.
+// Collapses many small pty writes into one WebSocket message, which
+// dramatically reduces main-thread decode/render work in the browser
+// during high-throughput generation (e.g. Claude Code streaming output).
+const outputBuffers = new Map(); // terminalId -> Buffer[]
+const outputTimers  = new Map(); // terminalId -> timer
+
+function flushOutput(terminalId) {
+  const timer = outputTimers.get(terminalId);
+  if (timer) { clearTimeout(timer); outputTimers.delete(terminalId); }
+  const chunks = outputBuffers.get(terminalId);
+  outputBuffers.delete(terminalId);
+  if (!chunks || chunks.length === 0) return;
+  const merged = Buffer.concat(chunks);
+  const c = activeTerminals.get(terminalId);
+  if (c) c.emitter.emit('output', merged.toString('base64'));
+}
+
 function emitOutput(terminalId, data) {
   const conn = activeTerminals.get(terminalId);
   if (!conn) return;
-  conn.emitter.emit('output', data.toString('base64'));
+
+  let buf = outputBuffers.get(terminalId);
+  if (!buf) { buf = []; outputBuffers.set(terminalId, buf); }
+  buf.push(data);
+
+  if (!outputTimers.has(terminalId)) {
+    outputTimers.set(terminalId, setTimeout(() => {
+      outputTimers.delete(terminalId);
+      const chunks = outputBuffers.get(terminalId);
+      outputBuffers.delete(terminalId);
+      if (!chunks || chunks.length === 0) return;
+      const merged = Buffer.concat(chunks);
+      const c = activeTerminals.get(terminalId);
+      if (c) c.emitter.emit('output', merged.toString('base64'));
+    }, 10));
+  }
 }
 
 // Serialize ttyd spawns to avoid tmux server lock contention.
@@ -264,6 +296,7 @@ export const terminalManager = {
         // Prevents a stale connection's close from nuking a newer connection.
         const current = activeTerminals.get(terminalId);
         if (current && current.ttydWs === ttydWs) {
+          flushOutput(terminalId);
           activeTerminals.delete(terminalId);
           emitter.emit('closed');
         } else {
@@ -337,6 +370,7 @@ export const terminalManager = {
     // Close ttyd connection
     const conn = activeTerminals.get(terminalId);
     if (conn && conn.ttydWs) {
+      flushOutput(terminalId);
       conn.ttydWs.close();
       activeTerminals.delete(terminalId);
     }
@@ -353,6 +387,7 @@ export const terminalManager = {
   detachTerminal(terminalId) {
     const conn = activeTerminals.get(terminalId);
     if (conn && conn.ttydWs) {
+      flushOutput(terminalId);
       conn.ttydWs.close();
       activeTerminals.delete(terminalId);
     }
