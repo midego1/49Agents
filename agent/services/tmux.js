@@ -473,12 +473,15 @@ export class TmuxService {
         return '';
       }
 
-      // -e = include ANSI escape sequences (colors), -p = print to stdout
-      // -S - = from start of history, -E -1 = stop before the visible screen
-      //   (ttyd sends the visible screen naturally, so we only need scrollback)
+      // -p = print to stdout, -S - = from start of history, -E -1 = stop
+      // before the visible screen (ttyd sends the live screen naturally).
+      // Intentionally no -e: that flag injects tmux cursor-positioning sequences
+      // (\e[H, \e[?25h/l, \e[J etc.) that aren't part of the original pty
+      // stream. Replaying them in xterm.js corrupts cursor position and leaves
+      // stale '_' glyphs at the start of lines throughout the scrollback.
       // maxBuffer raised to 10MB — default 1MB silently truncates long histories
       const { stdout } = await execAsync(
-        `tmux capture-pane -e -t ${escapeShellArg(terminal.tmuxSession)} -p -S - -E -1`,
+        `tmux capture-pane -t ${escapeShellArg(terminal.tmuxSession)} -p -S - -E -1`,
         { maxBuffer: 10 * 1024 * 1024, timeout: 3000 }
       );
       return stdout;

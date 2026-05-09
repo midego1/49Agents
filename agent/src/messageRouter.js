@@ -112,7 +112,22 @@ export function createMessageRouter(sendToRelay, options = {}) {
     try {
       const history = await tmuxService.captureHistory(terminalId);
       if (history) {
-        const normalized = history.replace(/\n/g, '\r\n');
+        // Strip tmux-injected cursor/screen control sequences that aren't part
+        // of the original pty stream. capture-pane -e adds these to mark the
+        // visible area boundary; replaying them in xterm.js moves the cursor to
+        // unexpected positions and leaves stale '_' glyphs at line starts.
+        // Specifically strip: cursor position (\e[H, \e[row;colH), cursor
+        // show/hide (\e[?25h/l), erase display (\e[J, \e[2J), and tmux's
+        // own OSC/DCS sequences that bleed through with -e.
+        const stripped = history
+          .replace(/\x1b\[\d*;\d*H/g, '')   // \e[row;colH  cursor position
+          .replace(/\x1b\[\d*H/g, '')        // \e[H / \e[nH cursor position
+          .replace(/\x1b\[\?25[hl]/g, '')    // \e[?25h/l    cursor show/hide
+          .replace(/\x1b\[[\d;]*J/g, '')     // \e[J/2J      erase display
+          .replace(/\x1bP[^\x1b]*\x1b\\/g, '') // DCS sequences
+          .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, ''); // OSC sequences
+        // Only convert bare \n (not already \r\n) to \r\n for xterm.
+        const normalized = stripped.replace(/(?<!\r)\n/g, '\r\n');
         const base64History = Buffer.from(normalized).toString('base64');
         sendToRelay(MSG.TERMINAL_HISTORY, { terminalId, data: base64History });
       }
