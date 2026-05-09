@@ -11,9 +11,15 @@ const { autoUpdater } = updaterPkg;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Disable GPU compositing — prevents the GPU process from saturating under
-// heavy terminal streaming, which causes whole-app lag in Electron.
+// Disable all GPU / WebGPU acceleration. Without these switches Electron still
+// spawns a GPU helper process (49 Agents Helper (GPU)) even when hardware
+// acceleration is off, because Dawn/WebGPU initialises independently.
 app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-webgl');
+app.commandLine.appendSwitch('disable-webgl2');
 
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 
@@ -114,22 +120,36 @@ function prepareServices(userData) {
   const destCloud = join(userData, 'cloud');
   const destAgent = join(userData, 'agent');
 
+  const appVersion = app.getVersion();
+
   for (const [name, dest] of [['cloud', destCloud], ['agent', destAgent]]) {
     const src = join(repoRoot, name);
     const nm = join(dest, 'node_modules');
+    const versionStamp = join(dest, '.app-version');
+    const installedVersion = existsSync(versionStamp) ? readFileSync(versionStamp, 'utf8').trim() : '';
+    const needsInstall = !existsSync(nm);
+    const needsUpdate = installedVersion !== appVersion;
 
-    if (!existsSync(nm)) {
-      log(`copying ${name} to userData...`);
+    if (needsInstall || needsUpdate) {
+      log(`${needsInstall ? 'installing' : 'updating'} ${name} (${installedVersion || 'none'} -> ${appVersion})...`);
       mkdirSync(dest, { recursive: true });
-      cpSync(src, dest, { recursive: true, force: true });
-      log(`npm install in ${dest}...`);
-      execFileSync(npmBin, ['install', '--omit=dev', '--silent'], {
-        cwd: dest,
-        timeout: 120000,
+      // Re-copy everything except node_modules so source files (incl. public/*.min.js) stay current.
+      cpSync(src, dest, {
+        recursive: true,
+        force: true,
+        filter: (s) => !s.includes(`${name}/node_modules`),
       });
+      if (needsInstall) {
+        log(`npm install in ${dest}...`);
+        execFileSync(npmBin, ['install', '--omit=dev', '--silent'], {
+          cwd: dest,
+          timeout: 120000,
+        });
+      }
+      writeFileSync(versionStamp, appVersion);
       log(`${name} ready`);
     } else {
-      log(`${name} already prepared`);
+      log(`${name} up to date (${appVersion})`);
     }
   }
 
