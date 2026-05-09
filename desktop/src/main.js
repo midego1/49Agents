@@ -11,15 +11,13 @@ const { autoUpdater } = updaterPkg;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Disable all GPU / WebGPU acceleration. Without these switches Electron still
-// spawns a GPU helper process (49 Agents Helper (GPU)) even when hardware
-// acceleration is off, because Dawn/WebGPU initialises independently.
+// Disable hardware acceleration to keep the GPU helper from doing real
+// rendering work. We intentionally keep WebGL/compositing enabled in the
+// renderer — disabling them forces xterm.js off its canvas/WebGL path onto
+// a software fallback that fails to render box-drawing glyphs
+// (╭ ╰ ─ ❯ ⏵ ⏺ etc.), showing them as '_' instead.
 app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-webgl');
-app.commandLine.appendSwitch('disable-webgl2');
 // Disable ScreenCaptureKit features — these run in the GPU process and cause
 // sustained CPU usage even when GL is disabled, because Chromium still
 // initialises the capture pipeline on macOS by default in Electron 36.
